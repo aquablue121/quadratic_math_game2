@@ -3711,7 +3711,7 @@ function openNumpad(inputEl){
 
 function npInput(v){
     const disp=document.getElementById('numpad-display');
-    let cur=disp.innerText==='0'?'':disp.innerText;
+    let cur=disp.innerText;
     // x= 버튼은 앞에 붙임 (이미 있으면 무시)
     if(v==='x='){
         if(!cur.startsWith('x=')) disp.innerText='x='+cur;
@@ -3729,7 +3729,9 @@ function npInput(v){
     }
     // 소수점: 하나만 허용
     if(v==='.' && cur.includes('.')) return;
-    disp.innerText=(cur||'')+v;
+    // 초기 '0'일 때는 숫자로 교체 (단, '0.' 같은 경우는 유지)
+    if(cur==='0' && v!=='.') disp.innerText=v;
+    else disp.innerText=cur+v;
 }
 
 function npBack(){
