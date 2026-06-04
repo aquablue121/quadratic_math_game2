@@ -626,32 +626,6 @@ body{margin:0;background:#0a0614;}
         }
 
         /* ── 커스텀 숫자패드 ── */
-        #numpad-overlay {
-            display:none; position:absolute; z-index:3000;
-            background:rgba(10,5,25,0.97); border:2px solid #9b59b6;
-            border-radius:14px; padding:10px; gap:6px;
-            flex-direction:column; align-items:center;
-            box-shadow:0 4px 24px rgba(0,0,0,0.7);
-            min-width:200px;
-        }
-        #numpad-display {
-            width:100%; background:#1a0a2e; border:1.5px solid #9b59b6;
-            border-radius:8px; padding:6px 10px; font-size:18px; font-weight:bold;
-            color:#f1c40f; text-align:right; min-height:34px; box-sizing:border-box;
-        }
-        .numpad-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:5px; width:100%; }
-        .np-btn {
-            padding:10px 0; font-size:17px; font-weight:bold; cursor:pointer;
-            border-radius:8px; border:1.5px solid rgba(155,89,182,0.5);
-            background:rgba(45,26,78,0.9); color:#e0e0e0; text-align:center;
-            user-select:none; -webkit-user-select:none;
-        }
-        .np-btn:active { background:rgba(155,89,182,0.5); }
-        .np-btn.special { background:rgba(155,89,182,0.25); color:#c39bd3; }
-        .np-btn.confirm { background:rgba(39,174,96,0.3); color:#2ecc71; border-color:#2ecc71; }
-        .np-btn.erase   { background:rgba(231,76,60,0.2); color:#e74c3c; border-color:#e74c3c; }
-        .np-btn.eq-btn  { background:rgba(241,196,15,0.2); color:#f1c40f; border-color:#f1c40f; }
-
         /* ── 메모장 ── */
         #memo-pad {
             display:none; position:fixed; z-index:4000;
@@ -711,30 +685,6 @@ body{margin:0;background:#0a0614;}
 
 <div id="game-container">
     <!-- 커스텀 숫자패드 -->
-    <div id="numpad-overlay">
-        <div id="numpad-display">0</div>
-        <div class="numpad-grid">
-            <button class="np-btn special" onclick="npInput('x=')">x=</button>
-            <button class="np-btn special" onclick="npInput('-')">−</button>
-            <button class="np-btn special" onclick="npInput('.')">.</button>
-            <button class="np-btn erase"   onclick="npBack()">⌫</button>
-
-            <button class="np-btn" onclick="npInput('7')">7</button>
-            <button class="np-btn" onclick="npInput('8')">8</button>
-            <button class="np-btn" onclick="npInput('9')">9</button>
-            <button class="np-btn erase"   onclick="npClear()">C</button>
-
-            <button class="np-btn" onclick="npInput('4')">4</button>
-            <button class="np-btn" onclick="npInput('5')">5</button>
-            <button class="np-btn" onclick="npInput('6')">6</button>
-            <button class="np-btn special" onclick="npInput('0')">0</button>
-
-            <button class="np-btn" onclick="npInput('1')">1</button>
-            <button class="np-btn" onclick="npInput('2')">2</button>
-            <button class="np-btn" onclick="npInput('3')">3</button>
-            <button class="np-btn confirm" onclick="npConfirm()" style="grid-row:span 1">✔</button>
-        </div>
-    </div>
 
     <!-- 메모장 -->
     <div id="memo-pad">
@@ -3688,96 +3638,6 @@ function showTeamMsg(msg, color){
 /* ================================================================
    커스텀 숫자패드
 ================================================================ */
-let _npTarget=null; // 현재 입력 대상 input 요소
-
-function openNumpad(inputEl){
-    _npTarget=inputEl;
-    const np=document.getElementById('numpad-overlay');
-    np.style.display='flex';
-    // 입력 필드 위치 기준으로 패드 배치
-    const rect=inputEl.getBoundingClientRect();
-    const gc=document.getElementById('game-container').getBoundingClientRect();
-    // 스케일 보정
-    const scale=gc.width/1008;
-    let top=(rect.bottom-gc.top)/scale+10;
-    let left=(rect.left-gc.left)/scale;
-    // 화면 밖으로 나가지 않게 보정
-    if(top+250>750) top=(rect.top-gc.top)/scale-260;
-    if(left+210>990) left=990-210;
-    np.style.top=Math.max(5,top)+'px';
-    np.style.left=Math.max(5,left)+'px';
-    document.getElementById('numpad-display').innerText=inputEl.value||'';
-}
-
-function npInput(v){
-    const disp=document.getElementById('numpad-display');
-    let cur=disp.innerText;
-    // x= 버튼은 앞에 붙임 (이미 있으면 무시)
-    if(v==='x='){
-        if(!cur.startsWith('x=')) disp.innerText='x='+cur;
-        return;
-    }
-    // 음수 부호: 맨 앞에 토글
-    if(v==='-'){
-        if(cur.startsWith('x=')){
-            const rest=cur.slice(2);
-            disp.innerText='x='+(rest.startsWith('-')?rest.slice(1):'-'+rest);
-        } else {
-            disp.innerText=cur.startsWith('-')?cur.slice(1):'-'+cur;
-        }
-        return;
-    }
-    // 소수점: 하나만 허용
-    if(v==='.' && cur.includes('.')) return;
-    // 초기 '0'일 때는 숫자로 교체 (단, '0.' 같은 경우는 유지)
-    if(cur==='0' && v!=='.') disp.innerText=v;
-    else disp.innerText=cur+v;
-}
-
-function npBack(){
-    const disp=document.getElementById('numpad-display');
-    const cur=disp.innerText;
-    disp.innerText=cur.length>1?cur.slice(0,-1):'0';
-}
-function npClear(){
-    document.getElementById('numpad-display').innerText='0';
-}
-function npConfirm(){
-    if(_npTarget){
-        const val=document.getElementById('numpad-display').innerText;
-        _npTarget.value=val==='0'?'':val;
-        _npTarget.dispatchEvent(new Event('input',{bubbles:true}));
-    }
-    document.getElementById('numpad-overlay').style.display='none';
-    _npTarget=null;
-}
-
-// 게임 내 모든 input.focus → 커스텀 패드 열기 (태블릿 감지 시)
-function isTouchDevice(){
-    return ('ontouchstart' in window)||navigator.maxTouchPoints>0;
-}
-
-document.addEventListener('focusin',function(e){
-    const el=e.target;
-    if(!isTouchDevice()) return;
-    if(el.tagName!=='INPUT') return;
-    // 팀 입력 화면 텍스트 필드는 제외
-    if(['inp-pname','inp-tcode','inp-fb-db','inp-fb-api','inp-fb-proj','inp-fb-app'].includes(el.id)) return;
-    // 메모장 내부 제외
-    if(el.closest && el.closest('#memo-pad')) return;
-    // 기본 키보드 방지 후 커스텀 패드 열기
-    el.blur();
-    setTimeout(()=>openNumpad(el),50);
-});
-
-// 패드 외부 클릭 시 닫기
-document.addEventListener('pointerdown',function(e){
-    const np=document.getElementById('numpad-overlay');
-    if(np.style.display!=='none' && !np.contains(e.target)){
-        np.style.display='none';
-        _npTarget=null;
-    }
-});
 
 /* ================================================================
    메모장
