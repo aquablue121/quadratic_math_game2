@@ -1,0 +1,4649 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>미니게임 Q4·Q5</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<style>
+body{margin:0;background:#0a0614;}
+        body { background: #111; color: white; display: block; margin: 0; padding: 0; font-family: 'Malgun Gothic', sans-serif; overflow: hidden; width: 100vw; height: 100vh; }
+        #game-container { width: 1000px; height: 750px; position: relative; border: 4px solid #3d2e23; overflow: hidden; background: #000; transform-origin: top center; }
+
+        #bg-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-size: cover; background-position: center top; z-index: 0; }
+        .char-box { position: absolute; width: 240px; height: 270px; z-index: 10; background-size: contain; background-repeat: no-repeat; background-position: center bottom; transition: 0.3s; }
+        #knight { left: 80px; bottom: 160px; background-image: url('assets/k_solo.jpg'); }
+        #target { right: 80px; bottom: 160px; background-image: url('assets/a_solo.jpg'); }
+
+        .fullscreen-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-size: cover; background-position: center; z-index: 500; display: none; }
+        #overlay-msg { position: absolute; width: 90%; left:5%; text-align: center; top: 50%; transform: translateY(-50%); font-size: 40px; font-weight: bold; color: #fff; text-shadow: 4px 4px 15px #000, 0 0 30px rgba(0,0,0,0.9); z-index: 510; pointer-events: none; white-space: pre-line; background: rgba(0,0,0,0.5); border-radius: 16px; padding: 18px; box-sizing: border-box; }
+
+        canvas { position: absolute; top: 0; left: 0; pointer-events: none; }
+        #grid-layer { z-index: 20; }
+        #graph-layer { z-index: 21; }
+
+        .grid-dot { position: absolute; width: 22px; height: 22px; background: rgba(255,255,100,0.45); border: 2px solid rgba(255,255,255,0.8); border-radius: 50%; transform: translate(-50%,-50%); cursor: pointer; z-index: 60; box-shadow: 0 0 6px rgba(255,255,100,0.6); transition: background 0.15s, transform 0.1s; }
+        .grid-dot:hover { background: rgba(255,255,0,0.75); transform: translate(-50%,-50%) scale(1.3); }
+
+        /* TOP UI */
+        #top-ui { position: absolute; top: 15px; width: 100%; display: flex; justify-content: space-between; padding: 0 25px; box-sizing: border-box; z-index: 100; }
+        .status-box { background: rgba(0,0,0,0.9); border: 2px solid #f1c40f; padding: 10px 14px; border-radius: 8px; width: 210px; }
+        .hp-bar { width: 100%; height: 16px; background: #222; margin-top: 5px; border: 1px solid #fff; border-radius: 8px; overflow: hidden; }
+        .hp-fill { height: 100%; width: 100%; transition: 0.4s; background: linear-gradient(to right, #2ecc71, #27ae60); }
+
+        /* BOTTOM PANEL */
+        #bottom-panel { position: absolute; bottom: 0; width: 100%; background: rgba(25,20,15,0.97); border-top: 4px solid #5d4a3e; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; padding: 8px 10px 10px; box-sizing: border-box; height: 160px; }
+        #quiz-box { font-size: 18px; color: #f1c40f; font-weight: bold; text-align: center; margin-bottom: 6px; line-height: 1.4; white-space: pre-line; }
+        #control-area button { padding: 8px 22px; font-size: 17px; cursor: pointer; border-radius: 10px; margin: 0 6px; font-weight: bold; border: 2px solid #f1c40f; background: #2c3e50; color: white; }
+        #control-area button:hover { background: #3d5166; }
+
+        #small-msg { position: absolute; top: 145px; width: 100%; text-align: center; font-size: 21px; font-weight: bold; text-shadow: 2px 2px 10px #000; z-index: 300; pointer-events: none; display: none; background: rgba(0,0,0,0.78); padding: 8px 0; }
+
+        /* ===== QUEST 3: 비밀의 숲 — 4분할 grid =====
+           헤더(36px) + 아래를 2×2 grid
+           [좌상: 지시문] [우상: 그래프]
+           [좌하: 버튼]   [우하: 수식]
+        ===== */
+        #q3-overlay {
+            position:absolute; top:0; left:0; width:100%; height:100%;
+            display:none; z-index:180;
+            background:url('assets/m_secret1.png') center top/cover no-repeat;
+        }
+        /* 루트: 헤더 36px + 나머지 */
+        #q3-bottom {
+            position:absolute; top:0; left:0; width:100%; height:100%;
+            z-index:190; box-sizing:border-box;
+            display:flex; flex-direction:column;
+            overflow:hidden;
+        }
+        /* 헤더 (48px 고정) — 제목이 그리드보다 반드시 위에 */
+        #q3-header-row {
+            flex:0 0 48px; min-height:48px; max-height:48px;
+            display:flex; align-items:center; justify-content:space-between;
+            padding:0 18px; box-sizing:border-box;
+            background:rgba(8,4,22,1);
+            border-bottom:2px solid #7b2d8b;
+            position:relative; z-index:5;
+        }
+        #q3-prog-label  { font-size:14px; color:#9b59b6; font-weight:bold; }
+        #q3-quest-title { font-size:15px; color:#c39bd3; font-weight:bold; }
+
+        /* 2×2 grid — 헤더(48px) 아래 나머지 전부 */
+        #q3-grid {
+            flex:1; min-height:0;
+            display:grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap:0;
+            overflow:hidden;
+        }
+
+        /* 각 칸: overflow:hidden 으로 내용 절대 침범 불가 */
+        .q3-cell {
+            overflow:hidden;
+            box-sizing:border-box;
+        }
+
+        /* 좌상(A): 그래프 캔버스 — grid 내부이므로 헤더 아래에서 시작 */
+        #q3-cell-A {
+            grid-column:1; grid-row:1;
+            background:rgba(6,2,18,1);
+            border-right:2px solid rgba(123,45,139,0.6);
+            border-bottom:2px solid rgba(123,45,139,0.6);
+            display:flex; align-items:center; justify-content:center;
+            padding:6px 8px;
+            overflow:hidden;
+        }
+
+        /* 우상(B): 지시문 */
+        #q3-cell-B {
+            grid-column:2; grid-row:1;
+            background:rgba(10,5,28,1);
+            border-bottom:2px solid rgba(123,45,139,0.6);
+            display:flex; align-items:center; justify-content:center;
+            padding:16px 20px;
+        }
+        #q3-quiz-text {
+            font-size:17px; color:#f1c40f; font-weight:bold;
+            text-align:center; line-height:1.7; white-space:pre-line;
+            width:100%;
+        }
+        #q3-canvas {
+            display:block;
+            border:2px solid rgba(123,45,139,0.7);
+            border-radius:8px; background:rgba(10,5,25,1);
+            /* 칸 크기에 꽉 맞게: 최대 칸 너비/높이를 넘지 않음 */
+            max-width:100%; max-height:100%;
+            object-fit:contain;
+        }
+
+        /* 좌하(C): ㄱㄴㄷㄹ 버튼 */
+        #q3-cell-C {
+            grid-column:1; grid-row:2;
+            background:rgba(8,4,20,1);
+            border-right:2px solid rgba(123,45,139,0.6);
+            display:flex; align-items:center; justify-content:center;
+            padding:12px;
+            gap:0;
+        }
+        #q3-order-btns     { display:flex; gap:12px; flex-wrap:wrap; align-items:center; justify-content:center; }
+        #q3-graph-lbl-btns { display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:center; }
+
+        /* 우하(D): 수식 목록 + 힌트 + 제출 */
+        #q3-cell-D {
+            grid-column:2; grid-row:2;
+            background:rgba(8,4,22,1);
+            display:flex; flex-direction:column;
+            align-items:center; justify-content:center;
+            padding:10px 16px; gap:8px;
+        }
+        #q3-order-guide { color:#c39bd3; font-size:15px; text-align:center; line-height:1.7; }
+        #q3-formula-list {
+            display:flex; flex-direction:column; gap:7px;
+            width:100%; overflow-y:auto; max-height:100%;
+        }
+        .q3fi {
+            background:rgba(28,10,54,0.95); border:2px solid #7b2d8b;
+            border-radius:9px; padding:9px 13px; font-size:15px;
+            color:#f1c40f; font-weight:bold; cursor:pointer;
+            transition:border-color 0.15s;
+            display:flex; align-items:center; justify-content:space-between;
+            flex-shrink:0;
+        }
+        .q3fi:hover        { border-color:#f1c40f; }
+        .q3fi.q3fi-active  { border-color:#fff; background:rgba(50,20,80,0.95); }
+        .q3fi.q3fi-matched { border-color:#2ecc71; }
+        .q3fi-arrow { font-size:12px; color:#888; min-width:68px; text-align:right; white-space:nowrap; }
+        #q3-hint-msg {
+            font-size:14px; color:#f39c12; font-weight:bold;
+            text-align:center; white-space:pre-line; line-height:1.5;
+        }
+        #q3-submit-btn {
+            padding:9px 34px; font-size:15px; cursor:pointer; border-radius:10px;
+            font-weight:bold; border:2px solid #c39bd3; background:#3d1a5e; color:white;
+            flex-shrink:0;
+        }
+        #q3-submit-btn:hover { background:#6c3483; }
+
+        /* ===== 오프닝 씬 ===== */
+        #opening-screen {
+            position:absolute; top:0; left:0; width:100%; height:100%;
+            z-index:900; display:none; flex-direction:column;
+            align-items:center; justify-content:flex-end;
+            background:#000;
+        }
+        #opening-img {
+            position:absolute; top:0; left:0; width:100%; height:100%;
+            object-fit:cover;
+        }
+        #opening-msg {
+            position:relative; z-index:910; width:90%; text-align:center;
+            font-size:21px; font-weight:bold; color:#fff;
+            text-shadow:2px 2px 10px #000, 0 0 20px rgba(0,0,0,0.95);
+            background:rgba(0,0,0,0.68); border-radius:12px;
+            padding:14px 22px; margin-bottom:30px; line-height:1.7; white-space:pre-line;
+        }
+
+        /* ===== 피드백 ===== */
+        #feedback-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(160deg,#0a0a1a,#1a0a2e 50%,#0a1a0a); z-index: 700; display: none; overflow-y: auto; box-sizing: border-box; padding: 18px 26px; }
+        #feedback-screen::-webkit-scrollbar { width: 5px; }
+        #feedback-screen::-webkit-scrollbar-thumb { background: #9b59b6; border-radius: 3px; }
+        .fb-title { font-size: 24px; font-weight: bold; color: #f1c40f; text-align: center; margin-bottom: 16px; text-shadow: 0 0 18px #f39c12; letter-spacing: 2px; }
+        .fb-section { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; padding: 12px 16px; margin-bottom: 12px; }
+        .fb-section-title { font-size: 15px; font-weight: bold; margin-bottom: 8px; }
+        .fb-row { display: flex; align-items: center; gap: 10px; margin: 5px 0; font-size: 13px; }
+        .fb-bar-bg { flex: 1; height: 12px; background: #222; border-radius: 6px; overflow: hidden; }
+        .fb-bar-fill { height: 100%; border-radius: 6px; transition: width 1s ease; }
+        .fb-tag { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: 12px; font-weight: bold; margin: 2px 3px; }
+        .fb-good { background: #1a4a2a; color: #2ecc71; border: 1px solid #2ecc71; }
+        .fb-comment { font-size: 15px; color: #e8e8e8; line-height: 1.8; padding: 3px 0; }
+        #fb-restart-btn { display: block; width: 200px; margin: 14px auto 0; padding: 11px 0; font-size: 17px; font-weight: bold; cursor: pointer; border-radius: 10px; background: linear-gradient(135deg,#1a3a6a,#2980b9); border: 2px solid #5dade2; color: #fff; }
+
+        /* ===== QUEST 4: 평행이동 배틀 ===== */
+        #q4-overlay {
+            position:absolute; top:0; left:0; width:100%; height:100%;
+            display:none; z-index:180;
+            background:url('assets/push.png') center/cover no-repeat;
+        }
+        #q4-canvas-wrap {
+            position:absolute; top:0; left:0; width:100%; height:570px;
+            z-index:181; pointer-events:none;
+        }
+        #q4-canvas-bg  { position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; }
+        #q4-canvas-base{ position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; }
+        #q4-canvas-drag{ position:absolute; top:0; left:0; width:100%; height:100%; cursor:grab; }
+        /* 패널: 화면 아래 180px */
+        #q4-panel {
+            position:absolute; bottom:0; left:0; width:100%; height:180px;
+            background:rgba(12,8,4,0.98); border-top:4px solid #8b4513;
+            z-index:190; display:flex; flex-direction:column;
+            align-items:stretch; justify-content:flex-start; gap:4px;
+            box-sizing:border-box; padding:6px 16px 6px;
+        }
+        /* 헤더 행: 제목(좌) HP바(중) 진행도(우) */
+        #q4-header {
+            display:flex; align-items:center; justify-content:space-between;
+            width:100%; gap:12px; flex-shrink:0;
+        }
+        #q4-title-left {
+            font-size:15px; color:#c39bd3; font-weight:bold; white-space:nowrap; flex-shrink:0;
+        }
+        #q4-hp-bar-wrap {
+            display:flex; align-items:center; gap:6px; flex:1; min-width:0;
+        }
+        #q4-hp-label { font-size:13px; color:#e74c3c; font-weight:bold; flex-shrink:0; }
+        #q4-hp-track {
+            flex:1; height:14px; background:#222; border:1px solid #e74c3c;
+            border-radius:7px; overflow:hidden;
+        }
+        #q4-hp-fill {
+            height:100%; width:100%;
+            background:linear-gradient(to right,#e74c3c,#c0392b);
+            transition:width 0.4s;
+        }
+        #q4-hp-num { font-size:13px; color:#e74c3c; font-weight:bold; min-width:36px; text-align:right; flex-shrink:0; }
+        #q4-progress { font-size:14px; color:#f1c40f; font-weight:bold; white-space:nowrap; flex-shrink:0; }
+        /* 문제 정보 */
+        #q4-info { font-size:17px; color:#f1c40f; font-weight:bold; text-align:center; line-height:1.4; flex-shrink:0; }
+        /* 입력 영역 */
+        #q4-input-row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:center; flex-shrink:0; }
+        .q4-inp-group { display:flex; align-items:center; gap:5px; font-size:15px; color:#e0e0e0; }
+        .q4-inp { width:60px; font-size:16px; text-align:center; border-radius:6px; border:2px solid #c0392b; background:#1a0808; color:#fff; padding:3px 0; }
+        .q4-inp:focus { border-color:#f1c40f; outline:none; }
+        #q4-submit-btn {
+            padding:7px 28px; font-size:15px; font-weight:bold; cursor:pointer;
+            border-radius:8px; border:2px solid #f1c40f; background:#2c1a0a; color:#fff;
+        }
+        #q4-submit-btn:hover { background:#5d3a1a; }
+        /* 드래그 행 */
+        #q4-drag-row {
+            display:none; align-items:center; justify-content:center; gap:14px; flex-shrink:0;
+        }
+        #q4-drag-guide { font-size:14px; color:#f39c12; font-weight:bold; }
+        #q4-drag-submit-btn {
+            padding:7px 28px; font-size:15px; font-weight:bold; cursor:pointer;
+            border-radius:8px; border:2px solid #2ecc71; background:#0a2a0a; color:#2ecc71;
+        }
+        #q4-drag-submit-btn:hover { background:#1a4a1a; }
+        #q4-msg { font-size:14px; font-weight:bold; min-height:16px; text-align:center; flex-shrink:0; }
+
+        /* ===== 유니콘 씬 ===== */
+        #unicorn-scene {
+            position:absolute; top:0; left:0; width:100%; height:100%;
+            display:none; z-index:620;
+            background:#000 !important; flex-direction:column;
+            align-items:center; justify-content:flex-end;
+        }
+        #unicorn-img {
+            position:absolute; top:0; left:0; width:100%; height:100%;
+            object-fit:cover;
+        }
+        #unicorn-msg {
+            position:relative; z-index:610; width:88%; text-align:center;
+            font-size:20px; font-weight:bold; color:#fff;
+            text-shadow:2px 2px 10px #000, 0 0 20px rgba(0,0,0,0.95);
+            background:rgba(0,0,0,0.68); border-radius:12px;
+            padding:13px 20px; margin-bottom:26px;
+            line-height:1.65; white-space:pre-line;
+        }
+
+        /* ===== QUEST 4.5: 일반형→표준형 ===== */
+        #q45-overlay {
+            position:absolute; top:0; left:0; width:100%; height:100%;
+            display:none; z-index:180;
+            background:url('assets/unicornq.png') center/cover no-repeat;
+        }
+        #q45-inner {
+            position:absolute; bottom:0; left:0; width:100%;
+            background:rgba(10,5,30,0.97); border-top:4px solid #9b59b6;
+            z-index:190; box-sizing:border-box; padding:10px 18px 8px;
+            display:flex; flex-direction:column; align-items:center; gap:6px;
+        }
+        #q45-header {
+            display:flex; align-items:center; justify-content:space-between;
+            width:100%; flex-shrink:0;
+        }
+        #q45-title { font-size:14px; color:#c39bd3; font-weight:bold; }
+        #q45-hp-wrap {
+            display:flex; align-items:center; gap:6px; flex:1; margin:0 16px;
+        }
+        #q45-hp-label { font-size:12px; color:#9b59b6; font-weight:bold; }
+        #q45-hp-track {
+            flex:1; height:13px; background:#1a0a2e; border:1px solid #9b59b6;
+            border-radius:7px; overflow:hidden;
+        }
+        #q45-hp-fill {
+            height:100%; width:100%;
+            background:linear-gradient(to right,#9b59b6,#6c3483);
+            transition:width 0.4s;
+        }
+        #q45-hp-num { font-size:12px; color:#c39bd3; font-weight:bold; min-width:32px; text-align:right; }
+        #q45-prog { font-size:13px; color:#f1c40f; font-weight:bold; }
+        #q45-blanks { display:none !important; }
+        #q55-blanks { display:none !important; }
+        #q45-problem { font-size:15px; color:#f1c40f; font-weight:bold; text-align:left; white-space:normal; line-height:2; }
+        #q55-problem { font-size:15px; color:#f1c40f; font-weight:bold; text-align:left; white-space:normal; line-height:2; }
+        #q45-blanks {
+            display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+            justify-content:center; font-size:15px; color:#e0e0e0;
+        }
+        .q45-inp {
+            width:60px; font-size:16px; text-align:center;
+            border-radius:6px; border:2px solid #9b59b6;
+            background:#1a0a2e; color:#fff; padding:4px 0;
+        }
+        .q45-inp:focus { border-color:#f1c40f; outline:none; }
+        #q45-submit-btn {
+            padding:7px 30px; font-size:15px; font-weight:bold; cursor:pointer;
+            border-radius:8px; border:2px solid #c39bd3; background:#2d1a4e; color:#fff;
+        }
+        #q45-submit-btn:hover { background:#5d3a8e; }
+        #q45-msg {
+            font-size:13px; font-weight:bold; min-height:16px;
+            text-align:center; white-space:pre-line; line-height:1.5;
+        }
+
+        /* ===== QUEST 5: 슬라임 몬스터 격투 ===== */
+        #q5-overlay {
+            position:absolute; top:0; left:0; width:100%; height:100%;
+            display:none; z-index:180;
+        }
+        #q5-bg {
+            position:absolute; top:0; left:0; width:100%; height:100%;
+            background:url('assets/bg.png') center/cover no-repeat; z-index:0;
+        }
+        #q5-knight {
+            position:absolute; left:60px; bottom:170px; width:240px; height:280px;
+            background:url('assets/k_solo.jpg') center/contain no-repeat; z-index:10;
+            transition:background-image 0.2s;
+        }
+        #q5-monster {
+            position:absolute; right:60px; bottom:170px; width:240px; height:280px;
+            background:url('assets/m_ready.png') center/contain no-repeat; z-index:10;
+            transition:background-image 0.2s;
+        }
+        /* 상단 HUD */
+        #q5-hud {
+            position:absolute; top:12px; left:0; width:100%;
+            display:flex; align-items:center; justify-content:space-between;
+            padding:0 20px; box-sizing:border-box; z-index:20;
+        }
+        #q5-hp-box {
+            background:rgba(0,0,0,0.85); border:2px solid #e74c3c;
+            border-radius:8px; padding:8px 14px; min-width:200px;
+        }
+        #q5-hp-label { font-size:12px; color:#e74c3c; font-weight:bold; margin-bottom:4px; }
+        #q5-hp-track {
+            width:100%; height:14px; background:#222; border:1px solid #e74c3c;
+            border-radius:7px; overflow:hidden;
+        }
+        #q5-hp-fill {
+            height:100%; width:100%;
+            background:linear-gradient(to right,#e74c3c,#c0392b); transition:width 0.4s;
+        }
+        #q5-hp-num { font-size:12px; color:#e74c3c; font-weight:bold; margin-top:2px; }
+        #q5-title-box {
+            background:rgba(0,0,0,0.85); border:2px solid #9b59b6;
+            border-radius:8px; padding:6px 16px; text-align:center;
+        }
+        #q5-title { font-size:14px; color:#c39bd3; font-weight:bold; }
+        #q5-prog  { font-size:13px; color:#f1c40f; font-weight:bold; margin-top:2px; }
+        /* 하단 패널 */
+        #q5-panel {
+            position:absolute; bottom:0; left:0; width:100%; height:190px;
+            background:rgba(10,5,20,0.97); border-top:4px solid #6c3483;
+            z-index:20; display:flex; flex-direction:column;
+            align-items:center; justify-content:center; gap:8px;
+            box-sizing:border-box; padding:8px 20px;
+        }
+        #q5-question { font-size:17px; color:#f1c40f; font-weight:bold; text-align:center; }
+        #q5-input-row { display:flex; gap:14px; align-items:center; flex-wrap:wrap; justify-content:center; }
+        .q5-inp-group { display:flex; align-items:center; gap:6px; font-size:15px; color:#e0e0e0; }
+        .q5-inp {
+            width:64px; font-size:16px; text-align:center;
+            border-radius:6px; border:2px solid #6c3483;
+            background:#1a0a2e; color:#fff; padding:4px 0;
+        }
+        .q5-inp:focus { border-color:#f1c40f; outline:none; }
+        #q5-attack-btn {
+            padding:8px 32px; font-size:16px; font-weight:bold; cursor:pointer;
+            border-radius:8px; border:2px solid #f1c40f; background:#2d1a4e; color:#fff;
+        }
+        #q5-attack-btn:hover { background:#5d3a8e; }
+        #q5-msg { font-size:14px; font-weight:bold; min-height:18px; text-align:center; }
+
+        /* ===== QUEST 5.5: 잠긴 문 ===== */
+        #q55-overlay {
+            position:absolute; top:0; left:0; width:100%; height:100%;
+            display:none; z-index:180;
+            background:url('assets/lockeddoor.png') center/cover no-repeat;
+        }
+        #q55-panel {
+            position:absolute; bottom:0; left:0; width:100%;
+            background:rgba(8,4,22,0.97); border-top:4px solid #9b59b6;
+            z-index:190; box-sizing:border-box; padding:10px 18px 8px;
+            display:flex; flex-direction:column; align-items:center; gap:7px;
+        }
+        #q55-title  { font-size:15px; color:#c39bd3; font-weight:bold; }
+        #q55-hint   { font-size:13px; color:#f39c12; text-align:center; line-height:1.5; }
+        #q55-problem{ font-size:15px; color:#f1c40f; font-weight:bold; text-align:center; white-space:pre-line; line-height:1.6; }
+        #q55-blanks { display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:center; }
+        .q55-inp {
+            width:60px; font-size:15px; text-align:center;
+            border-radius:6px; border:2px solid #9b59b6;
+            background:#1a0a2e; color:#fff; padding:3px 0;
+        }
+        .q55-inp:focus { border-color:#f1c40f; outline:none; }
+        #q55-submit-btn {
+            padding:7px 28px; font-size:15px; font-weight:bold; cursor:pointer;
+            border-radius:8px; border:2px solid #c39bd3; background:#2d1a4e; color:#fff;
+        }
+        #q55-submit-btn:hover { background:#5d3a8e; }
+        #q55-msg { font-size:13px; font-weight:bold; min-height:16px; text-align:center; }
+
+        /* ===== QUEST 6: 성 내부 미로 (일반형 그래프 그리기) ===== */
+        #q6-overlay {
+            position:absolute; top:0; left:0; width:100%; height:100%;
+            display:none; z-index:180;
+            background:url('assets/bg1.png') center/cover no-repeat;
+        }
+        /* 상단 헤더 */
+        #q6-header {
+            position:absolute; top:0; left:0; width:100%; height:46px;
+            background:rgba(8,4,22,0.97); border-bottom:2px solid #e67e22;
+            z-index:20; display:flex; align-items:center;
+            justify-content:space-between; padding:0 18px; box-sizing:border-box;
+        }
+        #q6-lv-hp { display:flex; align-items:center; gap:8px; }
+        #q6-lv-text { font-size:12px; color:#f1c40f; font-weight:bold; }
+        #q6-hp-track { width:100px; height:12px; background:#222; border:1px solid #e74c3c; border-radius:6px; overflow:hidden; }
+        #q6-hp-fill  { height:100%; width:100%; background:linear-gradient(to right,#e74c3c,#c0392b); transition:width 0.4s; }
+        #q6-hp-num   { font-size:12px; color:#e74c3c; font-weight:bold; }
+        #q6-title    { font-size:14px; color:#f39c12; font-weight:bold; }
+        #q6-prog     { font-size:13px; color:#f1c40f; font-weight:bold; }
+        /* 좌표평면 캔버스 영역 */
+        #q6-canvas-area {
+            position:absolute; top:46px; left:0; width:100%; height:530px; z-index:5;
+        }
+        #q6-canvas-grid { position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; }
+        #q6-canvas-graph{ position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; }
+        #q6-canvas-click{ position:absolute; top:0; left:0; width:100%; height:100%; cursor:crosshair; }
+        /* 하단 패널 */
+        #q6-panel {
+            position:absolute; bottom:0; left:0; width:100%; height:174px;
+            background:rgba(8,4,20,0.98); border-top:3px solid #e67e22;
+            z-index:20; display:flex; flex-direction:column;
+            align-items:center; justify-content:center; gap:6px;
+            box-sizing:border-box; padding:6px 18px;
+        }
+        #q6-question { font-size:17px; color:#f1c40f; font-weight:bold; text-align:center; }
+        #q6-controls { display:flex; gap:12px; align-items:center; flex-wrap:wrap; justify-content:center; }
+        .q6-curv-btn {
+            padding:7px 22px; font-size:14px; font-weight:bold; cursor:pointer;
+            border-radius:8px; border:2px solid #e67e22; background:#2a1400; color:#f39c12;
+            transition:all 0.15s;
+        }
+        .q6-curv-btn.selected { background:#e67e22; color:#fff; border-color:#f1c40f; }
+        .q6-curv-btn:hover { background:#5a3400; }
+        #q6-submit-btn {
+            padding:7px 28px; font-size:15px; font-weight:bold; cursor:pointer;
+            border-radius:8px; border:2px solid #f1c40f; background:#4a2800; color:#fff;
+        }
+        #q6-submit-btn:hover { background:#8b4513; }
+        #q6-status { font-size:13px; color:#aaa; text-align:center; }
+        #q6-msg    { font-size:14px; font-weight:bold; min-height:16px; text-align:center; }
+        /* 모드 선택 버튼 (꼭짓점/y절편) — 파란 계열 */
+        .q6-mode-btn {
+            padding:7px 16px; font-size:13px; font-weight:bold; cursor:pointer;
+            border-radius:8px; border:2px solid #5d6d7e; background:#12192a; color:#a9cce3;
+            transition:all 0.15s;
+        }
+        .q6-mode-btn:hover  { border-color:#4fc3f7; color:#4fc3f7; }
+        .q6-mode-btn.active { border-color:#4fc3f7; background:#0a2540; color:#4fc3f7; box-shadow:0 0 8px rgba(79,195,247,0.5); }
+        .q6-mode-btn.done   { border-color:#2ecc71; background:#0a2a18; color:#2ecc71; }
+        /* 모양 버튼 (∩/∪) — 주황 계열, 라디오 느낌 */
+        .q6-curv-btn {
+            padding:7px 20px; font-size:15px; font-weight:bold; cursor:pointer;
+            border-radius:20px; border:2px solid #e67e22; background:#2a1400; color:#f39c12;
+            transition:all 0.15s; min-width:100px;
+        }
+        .q6-curv-btn:hover   { background:#5a3400; border-color:#f1c40f; }
+        .q6-curv-btn.selected { border-color:#f1c40f; background:#7d4900; color:#fff; box-shadow:0 0 10px rgba(241,196,15,0.6); }
+        /* 제출 버튼 */
+        #q6-submit-btn {
+            padding:8px 28px; font-size:15px; font-weight:bold; cursor:pointer;
+            border-radius:8px; border:2px solid #27ae60; background:#0a2a18; color:#2ecc71;
+        }
+        #q6-submit-btn:hover { background:#1a5e35; }
+        /* 클릭 포인트 마커 */
+        .q6-dot {
+            position:absolute; width:18px; height:18px; border-radius:50%;
+            transform:translate(-50%,-50%); pointer-events:none; z-index:15;
+        }
+
+        /* ===== QUEST 7: 미노타우루스 최종 결전 ===== */
+        #q7-overlay {
+            position:absolute; top:0; left:0; width:100%; height:100%;
+            display:none; z-index:180;
+            background:url('assets/bg1.png') center/cover no-repeat;
+        }
+        #q7-knight {
+            position:absolute; left:60px; bottom:165px; width:184px; height:216px;
+            background-image:url('assets/k_bow.png');
+            background-size:contain; background-position:center; background-repeat:no-repeat;
+            z-index:10;
+        }
+        #q7-monster {
+            position:absolute; right:55px; bottom:160px; width:390px; height:450px;
+            background-image:url('assets/m_shield.png');
+            background-size:contain; background-position:center; background-repeat:no-repeat;
+            z-index:10;
+        }
+        #q7-hud {
+            position:absolute; top:0; left:0; width:100%; height:48px;
+            background:rgba(8,4,22,0.97); border-bottom:2px solid #e74c3c;
+            z-index:20; display:flex; align-items:center;
+            justify-content:space-between; padding:0 18px; box-sizing:border-box;
+        }
+        #q7-hp-box { display:flex; align-items:center; gap:7px; }
+        #q7-lv-text { font-size:12px; color:#f1c40f; font-weight:bold; }
+        #q7-hp-track { width:110px; height:13px; background:#222; border:1px solid #e74c3c; border-radius:6px; overflow:hidden; }
+        #q7-hp-fill  { height:100%; width:100%; background:linear-gradient(to right,#e74c3c,#c0392b); transition:width 0.4s; }
+        #q7-hp-num   { font-size:12px; color:#e74c3c; font-weight:bold; }
+        #q7-title    { font-size:14px; color:#f39c12; font-weight:bold; }
+        #q7-prog     { font-size:13px; color:#f1c40f; font-weight:bold; }
+        #q7-panel {
+            position:absolute; bottom:0; left:0; width:100%; min-height:190px;
+            background:rgba(10,3,0,0.97); border-top:3px solid #c0392b;
+            z-index:20; display:flex; flex-direction:column;
+            align-items:center; justify-content:center; gap:7px;
+            box-sizing:border-box; padding:10px 20px;
+        }
+        #q7-question { font-size:16px; color:#f1c40f; font-weight:bold; text-align:center; white-space:pre-line; line-height:1.6; }
+        #q7-input-area { display:flex; gap:14px; align-items:center; flex-wrap:wrap; justify-content:center; }
+        .q7-inp-group { display:flex; align-items:center; gap:5px; font-size:14px; color:#e0e0e0; }
+        .q7-inp {
+            width:62px; font-size:15px; text-align:center;
+            border-radius:6px; border:2px solid #c0392b; background:#1a0800; color:#fff; padding:3px 0;
+        }
+        .q7-inp:focus { border-color:#f1c40f; outline:none; }
+        #q7-attack-btn {
+            padding:8px 28px; font-size:15px; font-weight:bold; cursor:pointer;
+            border-radius:8px; border:2px solid #f1c40f; background:#4a2800; color:#fff;
+        }
+        #q7-attack-btn:hover { background:#8b4513; }
+        #q7-msg { font-size:13px; font-weight:bold; min-height:16px; text-align:center; white-space:pre-line; }
+
+
+        /* 골드 표시 */
+        .gold-badge {
+            position:absolute; top:55px; right:14px;
+            background:rgba(0,0,0,0.75); border:2px solid #f1c40f;
+            border-radius:10px; padding:5px 12px;
+            display:flex; align-items:center; gap:5px; z-index:26;
+        }
+        .gold-badge span { font-size:13px; color:#f1c40f; font-weight:bold; }
+        /* 아이템 뱃지가 있으면 골드는 그 아래 */
+        .has-item .gold-badge { top:105px; }
+        /* 아이템 표시 (Q5/Q7 우상단) */
+        .item-badge {
+            position:absolute; top:55px; right:14px;
+            background:rgba(0,0,0,0.75); border:2px solid #f1c40f;
+            border-radius:10px; padding:5px 10px;
+            display:flex; align-items:center; gap:6px; z-index:25;
+        }
+        .item-badge img { width:28px; height:28px; object-fit:contain; }
+        .item-badge span { font-size:12px; color:#f1c40f; font-weight:bold; }        @keyframes goldFloat {
+            0%   { opacity:1; transform:translateY(0); }
+            100% { opacity:0; transform:translateY(-50px); }
+        }
+
+        /* ===== 팀 협동 시스템 ===== */
+        #team-screen {
+            position:absolute; top:0; left:0; width:100%; height:100%;
+            background:rgba(8,4,20,0.98); z-index:2000;
+            display:flex; flex-direction:column;
+            align-items:center; justify-content:center; gap:16px;
+        }
+        #team-hud {
+            display:none; position:absolute; bottom:8px; right:10px;
+            z-index:500; background:rgba(0,0,0,0.9);
+            border:1.5px solid #9b59b6; border-radius:12px;
+            padding:8px 12px; min-width:175px;
+        }
+        #hint-popup, #team-done-popup {
+            display:none; position:absolute; top:50%; left:50%;
+            transform:translate(-50%,-50%);
+            z-index:1900; background:rgba(8,4,20,0.98);
+            border-radius:16px; padding:24px 30px; text-align:center;
+        }
+        #hint-popup  { border:2px solid #f39c12; }
+        #team-done-popup { border:2px solid #f1c40f; }
+        .team-btn {
+            padding:9px 24px; font-size:15px; font-weight:bold;
+            cursor:pointer; border-radius:8px; color:#fff;
+        }
+
+        /* ── 커스텀 숫자패드 ── */
+        #numpad-overlay {
+            display:none; position:absolute; z-index:3000;
+            background:rgba(10,5,25,0.97); border:2px solid #9b59b6;
+            border-radius:14px; padding:10px; gap:6px;
+            flex-direction:column; align-items:center;
+            box-shadow:0 4px 24px rgba(0,0,0,0.7);
+            min-width:200px;
+        }
+        #numpad-display {
+            width:100%; background:#1a0a2e; border:1.5px solid #9b59b6;
+            border-radius:8px; padding:6px 10px; font-size:18px; font-weight:bold;
+            color:#f1c40f; text-align:right; min-height:34px; box-sizing:border-box;
+        }
+        .numpad-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:5px; width:100%; }
+        .np-btn {
+            padding:10px 0; font-size:17px; font-weight:bold; cursor:pointer;
+            border-radius:8px; border:1.5px solid rgba(155,89,182,0.5);
+            background:rgba(45,26,78,0.9); color:#e0e0e0; text-align:center;
+            user-select:none; -webkit-user-select:none;
+        }
+        .np-btn:active { background:rgba(155,89,182,0.5); }
+        .np-btn.special { background:rgba(155,89,182,0.25); color:#c39bd3; }
+        .np-btn.confirm { background:rgba(39,174,96,0.3); color:#2ecc71; border-color:#2ecc71; }
+        .np-btn.erase   { background:rgba(231,76,60,0.2); color:#e74c3c; border-color:#e74c3c; }
+        .np-btn.eq-btn  { background:rgba(241,196,15,0.2); color:#f1c40f; border-color:#f1c40f; }
+
+        /* ── 메모장 ── */
+        #memo-pad {
+            display:none; position:fixed; z-index:4000;
+            background:rgba(8,4,20,0.97); border:2px solid #f1c40f;
+            border-radius:14px; padding:0; overflow:hidden;
+            box-shadow:0 4px 24px rgba(0,0,0,0.8);
+            flex-direction:column;
+            width:320px; height:380px;
+            top:50%; left:50%; transform:translate(-50%,-50%);
+        }
+        #memo-header {
+            background:rgba(241,196,15,0.15); padding:8px 14px;
+            display:flex; align-items:center; justify-content:space-between;
+            cursor:move; border-bottom:1px solid rgba(241,196,15,0.3);
+            user-select:none;
+        }
+        #memo-title { font-size:14px; font-weight:bold; color:#f1c40f; }
+        #memo-close { font-size:18px; cursor:pointer; color:#f1c40f; background:none; border:none; padding:0 4px; }
+        #memo-textarea {
+            flex:1; width:100%; background:rgba(255,255,240,0.96);
+            border:none; resize:none; padding:12px; font-size:15px;
+            color:#1a1a00; font-family:'Malgun Gothic',sans-serif; line-height:1.7;
+            box-sizing:border-box; outline:none;
+        }
+        #memo-footer {
+            padding:6px 12px; display:flex; justify-content:flex-end; gap:8px;
+            border-top:1px solid rgba(241,196,15,0.2);
+        }
+        .memo-foot-btn {
+            font-size:12px; padding:4px 12px; border-radius:6px; cursor:pointer;
+            border:1px solid #f1c40f; background:rgba(241,196,15,0.15); color:#f1c40f;
+        }
+
+        /* ── 메모 토글 버튼 (게임 화면 우하단) ── */
+        #memo-toggle-btn {
+            position:absolute; bottom:80px; right:4px; z-index:600;
+            padding:8px 14px; font-size:14px; font-weight:bold; cursor:pointer;
+            border-radius:10px; border:2px solid #f1c40f;
+            background:rgba(0,0,0,0.85); color:#f1c40f;
+            display:none;
+        }
+
+        /* 퀘스트별 골드 표시 */
+        .quest-gold-badge {
+            display:inline-flex; align-items:center; gap:4px;
+            font-size:13px; font-weight:bold; color:#f1c40f;
+            background:rgba(0,0,0,0.5); border-radius:8px;
+            padding:2px 8px; margin-left:8px;
+        }
+</style>
+</head>
+<body>
+<div id="sel" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(8,4,20,0.97);z-index:99999;flex-direction:column;align-items:center;justify-content:center;gap:22px;">
+<p style="font-size:28px;font-weight:bold;color:#f1c40f;text-align:center;margin:0;">이차함수 미니게임<br><span style="font-size:16px;color:#c39bd3;">Q4 → Q5</span></p>
+<p style="font-size:14px;color:#aaa;text-align:center;margin:0;line-height:2;">Q4 바위 굴리기 10문제<br>Q5 슬라임 격투 10문제<br><span style="font-size:12px;color:#666;">Q4 완료 후 Q5 자동진행 · Q5 완료 후 종합피드백</span></p>
+<button onclick="startMini()" style="padding:20px 60px;font-size:22px;font-weight:bold;cursor:pointer;border-radius:16px;border:3px solid #f1c40f;background:rgba(50,35,0,0.95);color:#fff;font-family:'Malgun Gothic',sans-serif;">🚀 게임 시작!</button></div>
+
+<div id="game-container">
+    <!-- 커스텀 숫자패드 -->
+    <div id="numpad-overlay">
+        <div id="numpad-display">0</div>
+        <div class="numpad-grid">
+            <button class="np-btn special" onclick="npInput('x=')">x=</button>
+            <button class="np-btn special" onclick="npInput('-')">−</button>
+            <button class="np-btn special" onclick="npInput('.')">.</button>
+            <button class="np-btn erase"   onclick="npBack()">⌫</button>
+
+            <button class="np-btn" onclick="npInput('7')">7</button>
+            <button class="np-btn" onclick="npInput('8')">8</button>
+            <button class="np-btn" onclick="npInput('9')">9</button>
+            <button class="np-btn erase"   onclick="npClear()">C</button>
+
+            <button class="np-btn" onclick="npInput('4')">4</button>
+            <button class="np-btn" onclick="npInput('5')">5</button>
+            <button class="np-btn" onclick="npInput('6')">6</button>
+            <button class="np-btn special" onclick="npInput('0')">0</button>
+
+            <button class="np-btn" onclick="npInput('1')">1</button>
+            <button class="np-btn" onclick="npInput('2')">2</button>
+            <button class="np-btn" onclick="npInput('3')">3</button>
+            <button class="np-btn confirm" onclick="npConfirm()" style="grid-row:span 1">✔</button>
+        </div>
+    </div>
+
+    <!-- 메모장 -->
+    <div id="memo-pad">
+        <div id="memo-header">
+            <span id="memo-title">📝 메모장</span>
+            <button id="memo-close" onclick="toggleMemo()">✕</button>
+        </div>
+        <textarea id="memo-textarea" placeholder="여기에 풀이 과정을 메모하세요..."></textarea>
+        <div id="memo-footer">
+            <button class="memo-foot-btn" onclick="clearMemo()">지우기</button>
+            <button class="memo-foot-btn" onclick="toggleMemo()">닫기</button>
+        </div>
+    </div>
+
+    <!-- 메모 토글 버튼 -->
+    <button id="memo-toggle-btn" onclick="toggleMemo()">📝 메모</button>
+
+    <div id="bg-layer"></div>
+    <div id="knight" class="char-box"></div>
+    <div id="target" class="char-box"></div>
+
+    <div id="full-overlay" class="fullscreen-overlay"></div>
+    <div id="overlay-msg"></div>
+    <div id="small-msg"></div>
+
+    <canvas id="grid-layer" width="1000" height="750"></canvas>
+    <canvas id="graph-layer" width="1000" height="750"></canvas>
+    <canvas id="q3ov-layer" width="1000" height="750" style="position:absolute;top:0;left:0;z-index:22;pointer-events:none;display:none;"></canvas>
+
+    <!-- 오프닝 씬 -->
+    <div id="opening-screen">
+        <img id="opening-img" src="" alt="">
+        <div id="opening-msg"></div>
+    </div>
+
+    <!-- QUEST 3 오버레이 — 4분할 grid -->
+    <div id="q3-overlay">
+        <div id="q3-bottom">
+
+            <!-- 헤더 -->
+            <div id="q3-header-row">
+                <div id="q3-prog-label"></div>
+                    <span class="quest-gold-badge">🪙 <span id="q3-gold-display">0</span>G</span>
+                <div id="q3-quest-title">🌲 QUEST 3: 비밀의 숲 그래프 퀴즈</div>
+                <div style="display:flex;align-items:center;gap:8px;min-width:160px;">
+                    <span style="font-size:12px;color:#9b59b6;font-weight:bold;">HP</span>
+                    <div style="flex:1;height:14px;background:#222;border:1px solid #7b2d8b;border-radius:7px;overflow:hidden;min-width:100px;">
+                        <div id="q3-hp-fill" style="height:100%;background:linear-gradient(to right,#2ecc71,#27ae60);transition:width 0.4s;width:100%;"></div>
+                    </div>
+                    <span id="q3-hp-num" style="font-size:12px;color:#2ecc71;font-weight:bold;min-width:32px;">100</span>
+                </div>
+            </div>
+
+            <!-- 2×2 grid -->
+            <div id="q3-grid">
+
+                <!-- 좌상(A): 그래프 캔버스 -->
+                <div id="q3-cell-A" class="q3-cell">
+                    <canvas id="q3-canvas" width="440" height="300"></canvas>
+                </div>
+
+                <!-- 우상(B): 지시문 -->
+                <div id="q3-cell-B" class="q3-cell">
+                    <div id="q3-quiz-text"></div>
+                </div>
+
+                <!-- 좌하(C): ㄱㄴㄷㄹ / A B C D 버튼 -->
+                <div id="q3-cell-C" class="q3-cell">
+                    <div id="q3-order-btns"     style="display:none;"></div>
+                    <div id="q3-graph-lbl-btns" style="display:none;"></div>
+                    <div id="q3-order-guide"    style="display:none;color:#aaa;font-size:14px;text-align:center;">
+                        오른쪽 그래프를 보고<br>a값 큰 순서대로 버튼을 클릭하세요.
+                    </div>
+                </div>
+
+                <!-- 우하(D): 수식 목록 + 힌트 + 제출 -->
+                <div id="q3-cell-D" class="q3-cell">
+                    <div id="q3-formula-list" style="display:none;"></div>
+                    <div id="q3-hint-msg"></div>
+                    <button id="q3-submit-btn" onclick="submitQ3Ov()">제출</button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+
+    <!-- QUEST 4: 평행이동 -->
+    <div id="q4-overlay">
+        <div id="q4-canvas-wrap">
+            <canvas id="q4-canvas-bg"   width="1000" height="570"></canvas>
+            <canvas id="q4-canvas-base" width="1000" height="570"></canvas>
+            <canvas id="q4-canvas-drag" width="1000" height="570"></canvas>
+        </div>
+        <div id="q4-panel">
+            <!-- 상단 헤더: 제목(좌) + HP바(중) + 진행도(우) -->
+            <div id="q4-header">
+                <div id="q4-title-left">🪨 QUEST 4: 바위 굴리기(평행이동)</div>
+                <div id="q4-hp-bar-wrap">
+                    <span id="q4-hp-label">HP</span>
+                    <div id="q4-hp-track">
+                        <div id="q4-hp-fill"></div>
+                    </div>
+                    <span id="q4-hp-num">100</span>
+                </div>
+                <span class="quest-gold-badge">🪙 <span id="q4-gold-display">0</span>G</span>
+                <div id="q4-progress">문제 1 / 10</div>
+            </div>
+            <!-- 문제 정보 -->
+            <div id="q4-info"></div>
+            <!-- 입력 영역 (1~5번) -->
+            <div id="q4-input-row">
+                <div class="q4-inp-group">
+                    <span>x축 방향으로</span>
+                    <input class="q4-inp" id="q4-inp-p" type="text" inputmode="decimal" pattern="-?[0-9.]*" placeholder="0">
+                    <span>만큼,</span>
+                </div>
+                <div class="q4-inp-group">
+                    <span>y축 방향으로</span>
+                    <input class="q4-inp" id="q4-inp-q" type="text" inputmode="decimal" pattern="-?[0-9.]*" placeholder="0">
+                    <span>만큼 이동</span>
+                </div>
+                <button id="q4-submit-btn" onclick="submitQ4()">✔ 확인</button>
+            </div>
+            <!-- 드래그 안내 + 제출 (6~10번) -->
+            <div id="q4-drag-row" style="display:none;">
+                <span id="q4-drag-guide">🖱️ 초록 그래프를 드래그하여 목표 위치로 이동 후 제출하세요!</span>
+                <button id="q4-drag-submit-btn" onclick="submitQ4()">🎯 제출</button>
+            </div>
+            <div id="q4-msg"></div>
+        </div>
+    </div>
+
+
+    <!-- 유니콘 씬 -->
+    <div id="unicorn-scene">
+        <img id="unicorn-img" src="" alt="">
+        <div id="unicorn-msg"></div>
+    </div>
+
+    <!-- QUEST 4.5: 일반형 → 표준형 -->
+    <div id="q45-overlay">
+        <div id="q45-inner">
+            <div id="q45-header">
+                <div id="q45-title">🦄 QUEST 4.5: 유니콘의 시험</div>
+                <div id="q45-hp-wrap">
+                    <span id="q45-hp-label">HP</span>
+                    <div id="q45-hp-track"><div id="q45-hp-fill"></div></div>
+                    <span id="q45-hp-num">100</span>
+                </div>
+                <span class="quest-gold-badge">🪙 <span id="q45-gold-display">0</span>G</span>
+                <div id="q45-prog">문제 1 / 5</div>
+            </div>
+            <div id="q45-problem"></div>
+            <div id="q45-blanks"></div>
+            <button id="q45-submit-btn" onclick="submitQ45()">✔ 확인</button>
+            <div id="q45-msg"></div>
+        </div>
+    </div>
+
+    <!-- QUEST 5: 슬라임 몬스터 격투 -->
+    <div id="q5-overlay">
+        <div id="q5-item-badge" class="item-badge" style="display:none;">
+            <img src="assets/unicorngift.png" alt="활과화살">
+            <span>마법의 활과 화살</span>
+        </div>
+        <div id="q5-bg"></div>
+        <div id="q5-knight"></div>
+        <div id="q5-monster"></div>
+        <div id="q5-hud">
+            <div id="q5-hp-box">
+                <div id="q5-lv-text" style="font-size:11px;color:#f1c40f;font-weight:bold;margin-bottom:2px;">LV.5 용사</div>
+                <div id="q5-hp-label">❤ HP</div>
+                <div id="q5-hp-track"><div id="q5-hp-fill"></div></div>
+                <div id="q5-hp-num">100</div>
+            </div>
+            <div id="q5-title-box">
+                <div style="display:flex;align-items:center;justify-content:space-between;width:100%;">
+                    <div id="q5-title">⚔ QUEST 5: 슬라임 몬스터 격투</div>
+                    <span class="quest-gold-badge">🪙 <span id="q5-gold-display">0</span>G</span>
+                </div>
+                <div id="q5-prog">문제 1 / 10</div>
+            </div>
+            <div style="min-width:200px;"></div>
+        </div>
+        <div id="q5-panel">
+            <div id="q5-question"></div>
+            <div id="q5-input-row">
+                <div class="q5-inp-group">
+                    <span>축의 방정식: x =</span>
+                    <input class="q5-inp" id="q5-inp-axis" type="text" inputmode="decimal" pattern="-?[0-9.]*" placeholder="?">
+                </div>
+                <div class="q5-inp-group">
+                    <span>꼭짓점:</span>
+                    <span>(</span>
+                    <input class="q5-inp" id="q5-inp-vx" type="text" inputmode="decimal" pattern="-?[0-9.]*" placeholder="x">
+                    <span>,</span>
+                    <input class="q5-inp" id="q5-inp-vy" type="text" inputmode="decimal" pattern="-?[0-9.]*" placeholder="y">
+                    <span>)</span>
+                </div>
+                <button id="q5-attack-btn" onclick="attackQ5()">⚔ 공격!</button>
+            </div>
+            <div id="q5-msg"></div>
+        </div>
+    </div>
+
+    <!-- QUEST 5.5: 잠긴 문 -->
+    <div id="q55-overlay">
+        <div id="q55-panel">
+            <div style="display:flex;align-items:center;justify-content:space-between;width:100%"><div id="q55-title">🔒 QUEST 5.5: 잠긴 문</div><span class="quest-gold-badge">🪙 <span id="q55-gold-display">0</span>G</span></div>
+            <div id="q55-hint">문에 새겨진 수식을 풀어야 문이 열린다...<br>"유니콘이 제시했던 문제랑 같은 거잖아?" 💡</div>
+            <div id="q55-problem"></div>
+            <div id="q55-blanks"></div>
+            <button id="q55-submit-btn" onclick="submitQ55()">🔓 문을 열어라!</button>
+            <div id="q55-msg"></div>
+        </div>
+    </div>
+
+    <!-- QUEST 6: 성 내부 미로 — 이차함수 그래프 그리기 -->
+    <div id="q6-overlay">
+        <div id="q6-item-badge" class="item-badge" style="display:none;">
+            <img src="assets/unicorngift.png" alt="활과화살">
+            <span>마법의 활과 화살</span>
+        </div>
+        <!-- 상단 헤더 -->
+        <div id="q6-header">
+            <div id="q6-lv-hp">
+                <span id="q6-lv-text">LV.6 용사</span>
+                <span style="color:#e74c3c;font-size:12px;font-weight:bold;">❤</span>
+                <div id="q6-hp-track"><div id="q6-hp-fill"></div></div>
+                <span id="q6-hp-num">100</span>
+            </div>
+            <div id="q6-title">🗺 QUEST 6: 성 내부 미로 탈출</div>
+            <span class="quest-gold-badge">🪙 <span id="q6-gold-display">0</span>G</span>
+            <div id="q6-prog">문제 1 / 10</div>
+        </div>
+        <!-- 좌표평면 캔버스 3겹 -->
+        <div id="q6-canvas-area">
+            <canvas id="q6-canvas-grid"  width="1000" height="530"></canvas>
+            <canvas id="q6-canvas-graph" width="1000" height="530"></canvas>
+            <canvas id="q6-canvas-click" width="1000" height="530"></canvas>
+            <!-- 클릭 가능 정수 점 컨테이너 -->
+            <div id="q6-dots-layer" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:40;pointer-events:none;"></div>
+        </div>
+        <!-- 하단 패널 -->
+        <div id="q6-panel">
+            <div id="q6-question"></div>
+            <div id="q6-controls">
+                <!-- 입력 모드 선택 버튼 -->
+                <button class="q6-mode-btn" id="q6-btn-vtx"  onclick="setQ6Mode('vtx')">📍 꼭짓점 선택</button>
+                <button class="q6-mode-btn" id="q6-btn-yint" onclick="setQ6Mode('yint')">📌 y축과의 교점 선택</button>
+                <span style="color:#aaa;font-size:18px;margin:0 4px;">│</span>
+                <span style="font-size:12px;color:#f39c12;font-weight:bold;white-space:nowrap;">그래프 모양<br>(하나 선택)</span>
+                <button class="q6-curv-btn" id="q6-btn-down" onclick="selectQ6Curv('down')">∪ 아래로 볼록</button>
+                <button class="q6-curv-btn" id="q6-btn-up"   onclick="selectQ6Curv('up')">∩ 위로 볼록</button>
+                <span style="color:#aaa;font-size:18px;margin:0 4px;">│</span>
+                <button id="q6-submit-btn" onclick="submitQ6()">✔ 제출!</button>
+            </div>
+            <div id="q6-status">먼저 [📍 꼭짓점 선택] 버튼을 누르고 좌표평면에서 점을 클릭하세요</div>
+            <div id="q6-msg"></div>
+        </div>
+    </div>
+
+    <!-- QUEST 7: 미노타우루스 최종 결전 -->
+    <div id="q7-overlay">
+        <div id="q7-item-badge" class="item-badge" style="display:none;">
+            <img src="assets/unicorngift.png" alt="활과화살">
+            <span>마법의 활과 화살</span>
+        </div>
+        <div id="q7-knight"></div>
+        <div id="q7-monster"></div>
+        <div id="q7-hud">
+            <div id="q7-hp-box">
+                <span id="q7-lv-text">LV.7 용사</span>
+                <span style="color:#e74c3c;font-size:13px;">❤</span>
+                <div id="q7-hp-track"><div id="q7-hp-fill"></div></div>
+                <span id="q7-hp-num">100</span>
+            </div>
+            <div id="q7-title">⚔ QUEST 7: 미노타우루스 최종 결전</div>
+            <div class="quest-gold-badge">🪙 <span id="q7-gold-display">0</span>G</div>
+            <div id="q7-prog">문제 1 / 6</div>
+        </div>
+        <div id="q7-panel">
+            <div id="q7-question"></div>
+            <div id="q7-input-area"></div>
+            <div id="q7-msg"></div>
+        </div>
+    </div>
+
+    <!-- 피드백 -->
+    <div id="feedback-screen">
+        <div class="fb-title">📊 학습 결과 분석</div>
+        <div id="fb-gold" style="font-size:22px;font-weight:bold;color:#f1c40f;text-align:center;margin:8px 0;">🪙 최종 골드: 0G</div>
+        <div id="fb-content"></div>
+        <button id="fb-restart-btn" onclick="restartFromQ1()">🔄 처음부터 다시!</button>
+    </div>
+
+    <div id="top-ui">
+        <div class="status-box">
+            <div id="lv-text" style="color:#f1c40f;font-weight:bold;">LV.1 용사</div>
+            <div class="hp-bar"><div id="p-hp-fill" class="hp-fill"></div></div>
+        </div>
+        <div style="text-align:center;">
+            <div id="q-title" style="font-size:17px;color:#fff;">QUEST</div>
+            <div id="q-prog" style="color:#f1c40f;font-size:22px;font-weight:bold;">1/10</div>
+        </div>
+        <div class="status-box" style="visibility:visible;text-align:right;">
+            <div style="font-size:12px;color:#f1c40f;font-weight:bold;">GOLD</div>
+            <div id="gold-display" style="font-size:20px;color:#f1c40f;font-weight:bold;">🪙 0</div>
+        </div>
+    </div>
+    <div id="bottom-panel">
+        <div id="quiz-box"></div>
+        <div id="control-area"></div>
+    </div>
+</div>
+</div>
+
+<script>
+/* ================================================================
+   전역 상태
+================================================================ */
+const CX=500,CY=350,UNIT=60;
+let pHP=100,currentLevel=1,currentQuest=1,qCount=1;
+let gold=0; // 골드
+let hasSeenFeedback=false; // 피드백 최초 표시 여부
+let passedQuests=[]; // 통과한 퀘스트 번호 목록
+let isPerfect=true,currentFunc=null,selectedDots=0,wrongInStage=0,correctCount=0;
+
+const gd={
+    q1:{c:0,w:0},
+    q2:{c:0,w:0},
+    q3:{c:0,w:0},
+    q4:{c:0,w:0},
+    q45:{c:0,w:0},
+    q5:{c:0,w:0},
+    q6:{c:0,w:0},
+    q55fb:{c:0,w:0},
+    q7:{c:0,w:0},
+};
+
+/* ================================================================
+   QUEST 1: 이차함수 판별 (10문제, 70%+마지막)
+================================================================ */
+const q1Pool=[
+    {f:"y = x² + 2x + 1",isQ:true},{f:"y = 3x²",isQ:true},
+    {f:"y = x(x - 3)",isQ:true},{f:"y = -2x² + 5",isQ:true},
+    {f:"y = (x-1)² + 4",isQ:true},{f:"y = 2x² - 3x + 1",isQ:true},
+    {f:"y = -(x+2)²",isQ:true},{f:"y = x² - 9",isQ:true},
+    {f:"y = (2x+1)(x-3)",isQ:true},{f:"y = 4x² + x",isQ:true},
+    {f:"y = -3x² + 2x",isQ:true},{f:"y = (x-4)(x+2)",isQ:true},
+    {f:"y = 5x² - x + 7",isQ:true},{f:"y = -(x+3)² + 1",isQ:true},
+    {f:"y = 2(x-1)(x+1)",isQ:true},{f:"y = -x² + 4x - 3",isQ:true},
+    {f:"y = x² + 5",isQ:true},{f:"y = -4x² + 1",isQ:true},
+    {f:"y = 5x - 7",isQ:false},{f:"y = -3x + 2",isQ:false},
+    {f:"y = 4/x",isQ:false},{f:"y = -2/x",isQ:false},
+    {f:"y = 3x",isQ:false},{f:"y = -x",isQ:false},
+    {f:"y = x³ + x²",isQ:false},{f:"y = 2x³ - x",isQ:false},
+    {f:"y = x³",isQ:false},{f:"y = x - 4",isQ:false},
+    {f:"y = 2x + 3",isQ:false},{f:"y = -x³ + 1",isQ:false},
+    {f:"y = 1/x + 2",isQ:false},{f:"y = (x+1)² - x²",isQ:false},
+];
+let q1Sel=[],isQuadratic=false,lastQ1Correct=false,q1WrongCount=0;
+
+function shuffleQ1(){
+    const t=q1Pool.filter(q=>q.isQ).sort(()=>Math.random()-0.5).slice(0,5);
+    const f=q1Pool.filter(q=>!q.isQ).sort(()=>Math.random()-0.5).slice(0,5);
+    q1Sel=[...t,...f].sort(()=>Math.random()-0.5);
+    lastQ1Correct=false;
+    q1WrongCount=0;
+}
+
+let q1IntroShown=false;
+function setupQ1(){
+    if(!q1IntroShown){
+        q1IntroShown=true;
+        showTopUI(true);
+        showOv('assets/b1.png',
+            '용사가 길을 가다가 천사(이차함수)를 만났다!\n과연 마주한 것은 천사(이차함수)일까,\n몬스터(이차함수가 아님)일까!\n\n이차함수이면 천사, 아니면 몬스터를 클릭하세요.\n총 10문제!',
+            ()=>_doSetupQ1(), false, '▶ 시작하기'
+        );
+        return;
+    }
+    _doSetupQ1();
+}
+function _doSetupQ1(){
+    showTopUI(true);
+    el('bg-layer').style.backgroundImage="url('assets/b1.png')";
+    el('target').style.display='block';
+    el('target').style.backgroundImage="url('assets/a_solo.jpg')";
+    el('knight').style.display='block';
+    const d=q1Sel[qCount-1]; isQuadratic=d.isQ;
+    setTopUI("QUEST 1: 천사(이차함수)의 판별",`${qCount}/10`);
+    el('quiz-box').innerText=`이 식은 이차함수(천사)입니까?\n[ ${d.f} ]`;
+    el('control-area').innerHTML=`
+        <button onclick="judgeQ1(true)">이차함수(천사)이다</button>
+        <button onclick="judgeQ1(false)">이차함수가 아니다(몬스터)</button>`;
+}
+
+function judgeQ1(choice){
+    el('control-area').innerHTML='';
+    const ok=(choice===isQuadratic);
+    if(ok){
+        correctCount++;gd.q1.c++;addGold(10);
+        if(isQuadratic){
+            showSmall("천사(이차함수)를 제대로 알아보았어요! HP 상승!","#2ecc71");
+            el('target').style.backgroundImage="url('assets/a_smile.png')";
+            pHP=Math.min(100,pHP+25);
+        } else {
+            knightAnim('assets/k_attack.jpg',1400);
+            showSmall("몬스터(이차함수가 아님)를 제대로 알아보았어요! HP 상승!","#3498db");
+            el('target').style.backgroundImage="url('assets/monster_hit.png')";
+            pHP=Math.min(100,pHP+25);
+        }
+    } else {
+        isPerfect=false;pHP=Math.max(0,pHP-25);gd.q1.w++;q1WrongCount++;
+        if(isQuadratic){
+            knightAnim('assets/k_attack.jpg',600);
+            setTimeout(()=>knightAnim('assets/k_down.jpg',1000),700);
+            showSmall("천사(이차함수)가 맞는데 아니라고 판단! 천사가 화가 났어요! HP 감소!","#e67e22");
+            el('target').style.backgroundImage="url('assets/a_angry.jpg')";
+        } else {
+            knightAnim('assets/k_down.jpg',1400);
+            showSmall("몬스터(이차함수가 아님)인데 잘못 판단했어요! HP 감소!","#e74c3c");
+            el('target').style.backgroundImage="url('assets/m_solo.png')";
+        }
+    }
+    if(qCount===10) lastQ1Correct=ok;
+    updateUI();
+    // HP 0 또는 오답 3개 이상 → 즉시 실패
+    if(pHP<=0){
+        setTimeout(()=>failQ1HP(),1200);
+        return;
+    }
+    setTimeout(()=>{qCount++;if(qCount>10)finishQ1();else setupQ1();},1800);
+}
+
+function failQ1HP(){
+    cleanDots();
+    showOv('assets/b1.png','체력이 소진되어 모험을 할 수 없게 되었습니다...\n여기까지의 결과를 확인해보세요.',()=>showFeedback());
+}
+
+function finishQ1(){
+    if(isPerfect)addGold(100);
+    markQuestPassed(1);
+    showOvFB('assets/bless.png','QUEST 1 통과!\n⬆ LEVEL UP! ⬆'+(isPerfect?' 🌟퍼펙트! +100G':''),()=>{
+        startQ2();
+    });
+}
+
+function startQ2(){
+    currentQuest=2;qCount=1;currentLevel=2;isPerfect=true;correctCount=0;q2WrongCount=0;shuffleQ2();
+    showOv('assets/b2.png',
+        '🗺 QUEST 2: 그래프 위의 점 찾기\n\ny=ax² 그래프 위에 있는 점 3개를 클릭하세요.\n그래프 식을 보고 ax²에 x를 대입해 확인하세요.\n\n총 10문제!',
+        ()=>setupQ2(), false, '▶ 시작하기'
+    );
+}
+
+/* ================================================================
+   QUEST 2: y=ax² 그래프 위의 점 찾기 (10문제, 70%+마지막)
+   a 값: 유리수 범위, 다양하게
+================================================================ */
+// y=ax² 형태만. a 값: 정수 및 유리수(분수) 형태
+// x가 정수일 때 y도 정수인 a 값만 사용 (클릭 가능한 점 보장)
+const q2AValues=[
+    {a:1,    disp:'1'},
+    {a:-1,   disp:'-1'},
+    {a:2,    disp:'2'},
+    {a:-2,   disp:'-2'},
+    {a:3,    disp:'3'},
+    {a:-3,   disp:'-3'},
+    {a:4,    disp:'4'},
+    {a:-4,   disp:'-4'},
+    {a:0.5,  disp:'(1/2)'},
+    {a:-0.5, disp:'-(1/2)'},
+    {a:0.25, disp:'(1/4)'},
+    {a:-0.25,disp:'-(1/4)'},
+];
+let q2Sel=[],lastQ2Correct=false,q2WrongCount=0;
+
+function shuffleQ2(){
+    q2Sel=q2AValues.slice().sort(()=>Math.random()-0.5).slice(0,10);
+    lastQ2Correct=false;
+    q2WrongCount=0;
+}
+
+// Q2 전용 좌표계 상수 (좌표가 더 넓게 보이도록)
+// 화면: 1000×750, 하단 패널 185px → 실제 그래프 영역 565px
+// 중심을 아래쪽으로(CY2=280), 단위를 50px으로 축소
+const Q2_CX=500, Q2_CY=280, Q2_UNIT=50;
+
+function setupQ2(){
+    showTopUI(true);
+    el('q3-overlay').style.display='none';
+    el('bg-layer').style.backgroundImage="url('assets/b2.png')";
+    el('target').style.display='none';
+    el('knight').style.display='block';
+    el('grid-layer').style.display='block';
+    el('graph-layer').style.display='block';
+    ctx('graph-layer').clearRect(0,0,1000,750);
+    selectedDots=0;wrongInStage=0;cleanDots();
+    drawGridQ2();
+
+    const item=q2Sel[qCount-1];
+    const a=item.a;
+    currentFunc={a:a,p:0,q:0};
+
+    // 수식 표시
+    const aStr=item.disp;
+    let formula;
+    if(aStr==='1') formula=`y = x²`;
+    else if(aStr==='-1') formula=`y = -x²`;
+    else formula=`y = ${aStr}x²`;
+
+    setTopUI("QUEST 2: y=ax² 그래프 위의 점 찾기",`${qCount}/10`);
+    el('quiz-box').innerText=`${formula}\n그래프 위의 점 3개를 클릭하세요!`;
+    el('control-area').innerHTML='';
+
+    // ★ 그래프는 처음에 그리지 않음 — 3개 정답 클릭 후에만 표시
+
+    // 그래프 위 정수 점 수집
+    // y=ax²에서 x가 정수일 때 y가 정수(또는 정수에 매우 근접)인 경우
+    const Q2_YMAX=6;
+    const usedSet=new Set();
+    const validOnGraph=[];
+
+    // (0,0)은 항상 그래프 위
+    validOnGraph.push({x:0,y:0});
+    usedSet.add('0,0');
+
+    for(let x=-9;x<=9;x++){
+        if(x===0) continue;
+        const y=a*x*x;
+        const yRound=Math.round(y*10000)/10000;
+        const yInt=Math.round(yRound);
+        if(Math.abs(yRound-yInt)<0.01 && yInt>=-Q2_YMAX && yInt<=Q2_YMAX){
+            const k=`${x},${yInt}`;
+            if(!usedSet.has(k)){usedSet.add(k);validOnGraph.push({x,y:yInt});}
+        }
+    }
+
+    // 그래프 위 점 배치 (화면 내) — sy>=70으로 y=4(sy=80)까지 허용
+    validOnGraph.forEach(({x,y})=>{
+        const sx=Q2_CX+x*Q2_UNIT;
+        const sy=Q2_CY-y*Q2_UNIT;
+        if(sx>=15&&sx<=985&&sy>=70&&sy<=570) mkDot(x,y,true,a);
+    });
+
+    // 오답 점 배치 — y를 -4~5 범위로 확장
+    for(let x=-8;x<=8;x++){
+        for(let y=-4;y<=5;y++){
+            if(usedSet.has(`${x},${y}`)) continue;
+            if(Math.random()>0.50) continue;
+            const sx=Q2_CX+x*Q2_UNIT;
+            const sy=Q2_CY-y*Q2_UNIT;
+            if(sx>=15&&sx<=985&&sy>=70&&sy<=570) mkDot(x,y,false,a);
+        }
+    }
+}
+
+function drawGridQ2(){
+    const c=ctx('grid-layer');
+    c.clearRect(0,0,1000,750);
+    const maxX=9, maxY=6;
+
+    // 보조 격자선
+    c.lineWidth=0.8;c.strokeStyle='rgba(255,255,255,0.14)';
+    for(let i=-maxX;i<=maxX;i++){
+        const x=Q2_CX+i*Q2_UNIT;
+        c.beginPath();c.moveTo(x,5);c.lineTo(x,590);c.stroke();
+    }
+    for(let j=-maxY;j<=maxY;j++){
+        const y=Q2_CY-j*Q2_UNIT;
+        c.beginPath();c.moveTo(5,y);c.lineTo(995,y);c.stroke();
+    }
+
+    // x축, y축
+    c.strokeStyle='#f1c40f';c.lineWidth=2.5;
+    c.beginPath();c.moveTo(5,Q2_CY);c.lineTo(990,Q2_CY);c.stroke();
+    c.beginPath();c.moveTo(Q2_CX,5);c.lineTo(Q2_CX,590);c.stroke();
+
+    // 화살표
+    c.fillStyle='#f1c40f';
+    c.beginPath();c.moveTo(994,Q2_CY);c.lineTo(980,Q2_CY-7);c.lineTo(980,Q2_CY+7);c.fill();
+    c.beginPath();c.moveTo(Q2_CX,3);c.lineTo(Q2_CX-7,17);c.lineTo(Q2_CX+7,17);c.fill();
+
+    // ── x축 눈금 & 숫자 ──
+    c.textBaseline='top';c.textAlign='center';
+    for(let i=-maxX;i<=maxX;i++){
+        if(i===0) continue;
+        const x=Q2_CX+i*Q2_UNIT;
+        if(x<15||x>985) continue;
+        // 눈금 선
+        c.strokeStyle='rgba(255,255,255,0.45)';c.lineWidth=1;
+        c.beginPath();c.moveTo(x,Q2_CY-5);c.lineTo(x,Q2_CY+5);c.stroke();
+        // 숫자 (모든 정수)
+        c.fillStyle='#ffffff';
+        c.font='bold 14px Arial';
+        c.fillText(String(i), x, Q2_CY+8);
+    }
+
+    // ── y축 눈금 & 숫자 ──
+    c.textBaseline='middle';c.textAlign='right';
+    for(let j=-maxY;j<=maxY;j++){
+        if(j===0) continue;
+        const y=Q2_CY-j*Q2_UNIT;
+        if(y<10||y>585) continue;
+        // 눈금 선
+        c.strokeStyle='rgba(255,255,255,0.45)';c.lineWidth=1;
+        c.beginPath();c.moveTo(Q2_CX-5,y);c.lineTo(Q2_CX+5,y);c.stroke();
+        // 숫자
+        c.fillStyle='#ffffff';
+        c.font='bold 14px Arial';
+        c.fillText(String(j), Q2_CX-8, y);
+    }
+
+    // 원점 O
+    c.textBaseline='top';c.textAlign='right';
+    c.fillStyle='#dddddd';c.font='bold 14px Arial';
+    c.fillText('O', Q2_CX-5, Q2_CY+6);
+
+    // 축 라벨 x, y
+    c.font='bold 16px Arial';c.fillStyle='#f1c40f';
+    c.textAlign='left';c.textBaseline='middle';
+    c.fillText('x', 984, Q2_CY-2);
+    c.textAlign='center';c.textBaseline='top';
+    c.fillText('y', Q2_CX, 6);
+}
+
+function drawParabolaQ2(a, color, lw){
+    const c=ctx('graph-layer');
+    c.strokeStyle=color;c.lineWidth=lw;
+    c.shadowColor=color;c.shadowBlur=8;
+    c.beginPath();
+    let first=true;
+    for(let x=-10;x<=10;x+=0.05){
+        const y=a*x*x;
+        const sx=Q2_CX+x*Q2_UNIT;
+        const sy=Q2_CY-y*Q2_UNIT;
+        if(sy<0||sy>600||sx<0||sx>1000){first=true;continue;}
+        first?c.moveTo(sx,sy):c.lineTo(sx,sy);
+        first=false;
+    }
+    c.stroke();c.shadowBlur=0;
+}
+
+function mkDot(gx,gy,isCorrect,aVal){
+    const dot=document.createElement('div');
+    dot.className='grid-dot';
+    dot.style.left=(Q2_CX+gx*Q2_UNIT)+'px';
+    dot.style.top=(Q2_CY-gy*Q2_UNIT)+'px';
+    dot.title=`(${gx}, ${gy})`;
+    dot.onclick=function(){
+        this.onclick=null;
+        if(isCorrect){
+            this.style.background='#2ecc71';
+            this.style.borderColor='#27ae60';
+            selectedDots++;
+            const lbl=document.createElement('div');
+            lbl.style.cssText='position:absolute;top:-22px;left:50%;transform:translateX(-50%);font-size:11px;color:#2ecc71;font-weight:bold;white-space:nowrap;text-shadow:1px 1px 3px #000;pointer-events:none;z-index:65;';
+            lbl.innerText=`(${gx},${gy})`;
+            this.appendChild(lbl);
+            if(selectedDots===3){
+                drawParabolaQ2(aVal,'#f1c40f',7);
+                correctCount++;gd.q2.c++;pHP=Math.min(100,pHP+25);addGold(10);
+                if(qCount===10)lastQ2Correct=true;
+                updateUI();
+                const wayImg=aVal>0?'assets/way_up.png':'assets/way_down.png';
+                const wayMsg=aVal>0?'길이 열렸습니다! (아래로 볼록 그래프)':'길이 열렸습니다! (위로 볼록 그래프)';
+                setTimeout(()=>{
+                    cleanDots();ctx('graph-layer').clearRect(0,0,1000,750);
+                    showOv(wayImg,wayMsg,()=>{
+                        qCount++;if(qCount>10)finishQ2();else setupQ2();
+                    });
+                },800);
+            }
+        } else {
+            this.style.background='rgba(231,76,60,0.8)';
+            this.style.borderColor='#e74c3c';
+            wrongInStage++;gd.q2.w++;q2WrongCount++;
+            pHP=Math.max(0,pHP-25);updateUI();
+
+            // HP 0 → 즉시 게임오버 (Q2 전용: b2 이미지)
+            if(pHP<=0){
+                isPerfect=false;
+                cleanDots();ctx('graph-layer').clearRect(0,0,1000,750);
+                showOv("assets/b2.png","몬스터의 성으로 가는 길을 찾지 못해\n모험을 이어가지 못합니다...\n여기까지의 결과를 확인해보세요.",()=>{showFeedback();});
+                return;
+            }
+            if(wrongInStage===1){
+                // 첫 번째 오답: 힌트 표시, 같은 문제 계속
+                const aStr=q2Sel[qCount-1].disp;
+                showSmall(`💡 y=${aStr==='1'?'':aStr==='-1'?'-':aStr}x²에 x를 대입해 y를 계산해보세요!`,"#f39c12");
+            } else {
+                // 두 번째 오답: threat1/2 이미지 + 다음 문제
+                isPerfect=false;
+                const threatImg=Math.random()<0.5?'assets/threat1.png':'assets/threat2.png';
+                cleanDots();ctx('graph-layer').clearRect(0,0,1000,750);
+                showOv(threatImg,
+                    "길을 잘못 찾아 위험에 빠졌습니다!\n다음 구간으로 이동합니다...",
+                    ()=>{qCount++;if(qCount>10)finishQ2();else setupQ2();}
+                );
+            }
+        }
+    };
+    document.getElementById('game-container').appendChild(dot);
+}
+
+// 힌트용: 예시 정답 점 3개 문자열
+function getExamplePoints(a){
+    const pts=[];
+    for(let x=-6;x<=6&&pts.length<3;x++){
+        if(x===0&&pts.length===0){pts.push(`(0,0)`);continue;}
+        if(x===0) continue;
+        const y=a*x*x;
+        const yi=Math.round(y*1000)/1000;
+        const yint=Math.round(yi);
+        if(Math.abs(yi-yint)<0.001&&Math.abs(yint)<=5) pts.push(`(${x},${yint})`);
+    }
+    if(pts.length===0) pts.push('(0,0)');
+    return pts.slice(0,3).join(', ');
+}
+
+function finishQ2(){
+    cleanDots();
+    ctx('graph-layer').clearRect(0,0,1000,750);
+    if(isPerfect)addGold(100);
+    markQuestPassed(2);
+    showOvFB('assets/success2.png','몬스터의 성으로 가는 길을 찾았습니다!'+(isPerfect?'\n🌟퍼펙트! +100G':''),()=>{
+        startQ3Ov();
+    });
+}
+
+/* ================================================================
+   QUEST 3 (구 Q2.5): 비밀의 숲 — 3문제
+   문제1: a 순서 맞추기 (4개 그래프)
+   문제2: 식↔그래프 짝짓기 (4쌍)
+   문제3: 추가 짝짓기 (4쌍, 다른 구성)
+================================================================ */
+
+// ─── Q3 문제 풀 (랜덤) ────────────────────────────────────────────────────
+// a 후보 (다양한 유리수)
+const q3APool=[
+    {a:4,    text:'y = 4x²'},   {a:-4,   text:'y = -4x²'},
+    {a:3,    text:'y = 3x²'},   {a:-3,   text:'y = -3x²'},
+    {a:2,    text:'y = 2x²'},   {a:-2,   text:'y = -2x²'},
+    {a:1.5,  text:'y = (3/2)x²'},{a:-1.5,text:'y = -(3/2)x²'},
+    {a:1,    text:'y = x²'},    {a:-1,   text:'y = -x²'},
+    {a:0.5,  text:'y = (1/2)x²'},{a:-0.5,text:'y = -(1/2)x²'},
+    {a:0.25, text:'y = (1/4)x²'},{a:-0.25,text:'y = -(1/4)x²'},
+    {a:1/3,  text:'y = (1/3)x²'},{a:-1/3,text:'y = -(1/3)x²'},
+    {a:0.75, text:'y = (3/4)x²'},{a:-0.75,text:'y = -(3/4)x²'},
+    {a:5,    text:'y = 5x²'},   {a:-5,   text:'y = -5x²'},
+];
+
+let q3OvQ1=null,q3OvQ2=null,q3OvQ3=null,q3OvQ4=null,q3OvQ5=null;
+const q3Labels1=['ㄱ','ㄴ','ㄷ','ㄹ'];
+const q3Labels4=['ㄱ','ㄴ','ㄷ','ㄹ']; // 문제4 (순서형)
+const q3Labels2=['ㄱ','ㄴ','ㄷ','ㄹ'];
+const q3Labels3=['ㄱ','ㄴ','ㄷ','ㄹ'];
+const q3Labels5=['ㄱ','ㄴ','ㄷ','ㄹ']; // 문제5 (짝짓기)
+const q3GLabels2=['ㄱ','ㄴ','ㄷ','ㄹ'];
+const q3GLabels3=['ㄱ','ㄴ','ㄷ','ㄹ'];
+const q3GLabels5=['ㄱ','ㄴ','ㄷ','ㄹ'];
+
+// 양수/음수 비율: [2,2]가 절반 이상 나오도록 가중치 ([2,2],[2,2],[1,3],[3,1])
+function pickMix(posPool,negPool){
+    const mixes=[[2,2],[2,2],[1,3],[3,1]];
+    const [np,nn]=mixes[Math.floor(Math.random()*4)];
+    const pos=[...posPool].sort(()=>Math.random()-0.5).slice(0,np);
+    const neg=[...negPool].sort(()=>Math.random()-0.5).slice(0,nn);
+    // 부족하면 전체에서 보충
+    while(pos.length<np)pos.push(q3APool.filter(p=>p.a>0).sort(()=>Math.random()-0.5)[0]);
+    while(neg.length<nn)neg.push(q3APool.filter(p=>p.a<0).sort(()=>Math.random()-0.5)[0]);
+    return [...pos,...neg].sort(()=>Math.random()-0.5);
+}
+
+// 짝짓기 문제 생성 헬퍼
+function makeMatchQ(pool,fLabels,gLabels){
+    const formulas=pool.map((p,i)=>({label:fLabels[i],text:p.text,a:p.a}));
+    const shuffledG=[...pool].sort(()=>Math.random()-0.5).map((p,i)=>({label:gLabels[i],a:p.a}));
+    const ans={};
+    formulas.forEach((f,fi)=>{
+        const gi=shuffledG.findIndex(g=>Math.abs(g.a-f.a)<0.0001);
+        ans[fi]=shuffledG[gi].label;
+    });
+    return {formulas,graphs:shuffledG,answer:ans};
+}
+
+// 순서 맞추기 문제 생성 헬퍼 (a 내림차순)
+function makeOrderQ(pool,labels){
+    const graphs=pool.map((p,i)=>({label:labels[i],a:p.a}));
+    const sorted=[...graphs].sort((a,b)=>b.a-a.a);
+    return {graphs, answer:sorted.map(g=>g.label)};
+}
+
+function buildQ3Problems(){
+    const posAll=q3APool.filter(p=>p.a>0);
+    const negAll=q3APool.filter(p=>p.a<0);
+    const used=new Set();
+
+    function freshPick(posPool,negPool){
+        const avPos=posPool.filter(p=>!used.has(p.a));
+        const avNeg=negPool.filter(p=>!used.has(p.a));
+        // 부족하면 이미 쓴 것도 허용
+        const pPool=avPos.length>=3?avPos:posPool;
+        const nPool=avNeg.length>=3?avNeg:negPool;
+        const pool=pickMix(pPool,nPool);
+        pool.forEach(p=>used.add(p.a));
+        return pool;
+    }
+
+    // 문제1: 순서형 (a 내림차순)
+    const p1=freshPick(posAll,negAll);
+    q3OvQ1=makeOrderQ(p1,q3Labels1);
+
+    // 문제2: 짝짓기
+    const p2=freshPick(posAll,negAll);
+    q3OvQ2=makeMatchQ(p2,q3Labels2,q3GLabels2);
+
+    // 문제3: 짝짓기
+    const p3=freshPick(posAll,negAll);
+    q3OvQ3=makeMatchQ(p3,q3Labels3,q3GLabels3);
+
+    // 문제4: 순서형 (a 내림차순)
+    const p4=freshPick(posAll,negAll);
+    q3OvQ4=makeOrderQ(p4,q3Labels4);
+
+    // 문제5: 짝짓기
+    const p5=freshPick(posAll,negAll);
+    q3OvQ5=makeMatchQ(p5,q3Labels5,q3GLabels5);
+}
+
+let q3OvStep=1,q3OvSel=[],q3OvMatches={},q3OvActiveF=null;
+let q3OvCorrect=0;
+let q3QWrong=0; // 현재 문제 오답 횟수 (문제 바뀔 때 초기화)
+const Q3_TOTAL=5;
+
+function startQ3Ov(){
+    currentQuest=3;currentLevel=3;
+    q3OvStep=1;q3OvSel=[];q3OvMatches={};q3OvActiveF=null;
+    q3OvCorrect=0;
+    q3QWrong=0;
+    buildQ3Problems(); // 매번 새 문제 생성
+
+    // 캔버스 숨기기
+    ctx('grid-layer').clearRect(0,0,1000,750);
+    ctx('graph-layer').clearRect(0,0,1000,750);
+    el('grid-layer').style.display='none';
+    el('graph-layer').style.display='none';
+    el('knight').style.display='none';
+    el('target').style.display='none';
+    cleanDots();
+
+    showOv("assets/m_secret1.png",
+        "비밀의 숲을 지나야만\n몬스터의 성으로 향하는 길에 도달할 수 있다!\n퀴즈를 풀어 숲을 통과하라!",
+        ()=>{
+            el('bg-layer').style.backgroundImage="url('assets/m_secret1.png')";
+            showTopUI(false);
+            el('q3-overlay').style.display='flex';
+            el('q3-overlay').style.flexDirection='column';
+            setupQ3OvStep1();
+        }
+    );
+}
+
+function updateQ3Progress(step){
+    // dots 제거됨 — 문제 번호 레이블만 유지
+}
+
+// ---- 문제 1: 순서 맞추기 ----
+function setupQ3OvStep1(){
+    q3OvSel=[];
+    el('q3-prog-label').innerText=`문제 1 / ${Q3_TOTAL}`;
+    // A: 지시문
+    el('q3-quiz-text').innerText="y = ax² 그래프에서 a의 값이 큰 것부터 순서대로\n왼쪽 아래 버튼을 클릭하여 순서를 입력하시오.";
+    el('q3-hint-msg').innerText='';
+
+    const graphColors=['#4fc3f7','#f1c40f','#ff6b6b','#2ecc71'];
+
+    // B: 그래프 캔버스
+    requestAnimationFrame(()=>drawCombinedParabolas(el('q3-canvas'),q3OvQ1.graphs,graphColors));
+
+    // C: 순서 선택 버튼
+    const ob=el('q3-order-btns');
+    ob.innerHTML=''; ob.style.display='flex';
+    el('q3-graph-lbl-btns').style.display='none';
+    el('q3-order-guide').style.display='none';
+    q3OvQ1.graphs.forEach((g,i)=>{
+        const btn=document.createElement('div');
+        btn.id='q3ov_gb_'+g.label;
+        btn.style.cssText=`width:88px;height:52px;border:3px solid ${graphColors[i]};border-radius:10px;background:rgba(18,8,36,0.95);cursor:pointer;position:relative;display:flex;align-items:center;justify-content:center;transition:all 0.2s;`;
+        const lbl=document.createElement('span');
+        lbl.style.cssText=`color:${graphColors[i]};font-size:22px;font-weight:bold;`;
+        lbl.innerText=g.label;
+        btn.appendChild(lbl);
+        const badge=document.createElement('div');
+        badge.id='q3ov_badge_'+g.label;
+        badge.style.cssText='position:absolute;top:2px;right:6px;font-size:14px;font-weight:bold;color:#f1c40f;';
+        btn.appendChild(badge);
+        btn.onclick=()=>selectQ3OvG(g.label);
+        ob.appendChild(btn);
+    });
+
+    // D: 수식 목록 숨김, 힌트·제출만
+    el('q3-formula-list').style.display='none';
+    el('q3-submit-btn').style.display='block';
+}
+function setupQ3OvStep4_as2(){
+    q3OvSel=[];q3QWrong=0;
+    el('q3-prog-label').innerText=`문제 2 / ${Q3_TOTAL}`;
+    updateQ3Progress(2);
+    el('q3-quiz-text').innerText="y = ax² 그래프에서 a의 값이 큰 것부터 순서대로\n왼쪽 아래 버튼을 클릭하여 순서를 입력하시오.";
+    el('q3-hint-msg').innerText='';
+    const graphColors=['#4fc3f7','#f1c40f','#ff6b6b','#2ecc71'];
+    requestAnimationFrame(()=>drawCombinedParabolas(el('q3-canvas'),q3OvQ4.graphs,graphColors));
+    const ob=el('q3-order-btns');
+    ob.innerHTML=''; ob.style.display='flex';
+    el('q3-graph-lbl-btns').style.display='none';
+    el('q3-order-guide').style.display='none';
+    q3OvQ4.graphs.forEach((g,i)=>{
+        const btn=document.createElement('div');
+        btn.id='q3ov_gb_'+g.label;
+        btn.style.cssText=`width:88px;height:52px;border:3px solid ${graphColors[i]};border-radius:10px;background:rgba(18,8,36,0.95);cursor:pointer;position:relative;display:flex;align-items:center;justify-content:center;transition:all 0.2s;`;
+        const lbl=document.createElement('span');
+        lbl.style.cssText=`color:${graphColors[i]};font-size:22px;font-weight:bold;`;
+        lbl.innerText=g.label;
+        btn.appendChild(lbl);
+        const badge=document.createElement('div');
+        badge.id='q3ov_badge_'+g.label;
+        badge.style.cssText='position:absolute;top:2px;right:6px;font-size:14px;font-weight:bold;color:#f1c40f;';
+        btn.appendChild(badge);
+        btn.onclick=()=>selectQ3OvG(g.label);
+        ob.appendChild(btn);
+    });
+    el('q3-formula-list').style.display='none';
+    el('q3-submit-btn').style.display='block';
+}
+
+function selectQ3OvG(label){
+    if(q3OvSel.includes(label)){
+        q3OvSel=q3OvSel.filter(l=>l!==label);
+        el('q3ov_gb_'+label).classList.remove('selected');
+        el('q3ov_badge_'+label).innerText='';
+        q3OvSel.forEach((l,i)=>el('q3ov_badge_'+l).innerText=i+1);
+    } else {
+        if(q3OvSel.length>=4)return;
+        q3OvSel.push(label);
+        el('q3ov_gb_'+label).classList.add('selected');
+        el('q3ov_badge_'+label).innerText=q3OvSel.length;
+    }
+}
+
+// ---- 문제 2,3 공통: 짝짓기 ----
+function setupQ3OvMatch(stepNum,qData){
+    q3OvMatches={};q3OvActiveF=null;
+    el('q3-prog-label').innerText=`문제 ${stepNum} / ${Q3_TOTAL}`;
+    updateQ3Progress(stepNum);
+    // A: 지시문
+    el('q3-quiz-text').innerText="이차함수의 식에 알맞은 그래프를 짝지으시오.\n오른쪽 아래 식 클릭 → 왼쪽 아래 라벨 클릭으로\n연결하세요.";
+    el('q3-hint-msg').innerText='';
+
+    const graphColors=['#4fc3f7','#f1c40f','#ff6b6b','#2ecc71'];
+
+    // B: 그래프 캔버스
+    requestAnimationFrame(()=>drawCombinedParabolas(el('q3-canvas'),qData.graphs,graphColors));
+
+    // C: 그래프 라벨 버튼
+    el('q3-order-btns').style.display='none';
+    el('q3-order-guide').style.display='none';
+    const lb=el('q3-graph-lbl-btns');
+    lb.innerHTML=''; lb.style.display='flex';
+    qData.graphs.forEach((g,i)=>{
+        const gb=document.createElement('div');
+        gb.style.cssText=`min-width:64px;height:42px;padding:0 12px;border:2px solid ${graphColors[i]};border-radius:8px;background:rgba(18,8,36,0.95);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:bold;color:${graphColors[i]};transition:all 0.15s;box-sizing:border-box;`;
+        gb.innerText=g.label;
+        gb.onclick=()=>{
+            if(q3OvActiveF===null){el('q3-hint-msg').innerText='먼저 오른쪽 식을 클릭하세요!';return;}
+            q3OvMatches[q3OvActiveF]=g.label;
+            const arrEl=document.getElementById('q3fi_arr_'+q3OvActiveF);
+            if(arrEl){arrEl.innerText='→ '+g.label;arrEl.style.color='#2ecc71';}
+            const fiEl=document.getElementById('q3ov_fi_'+q3OvActiveF);
+            if(fiEl)fiEl.className='q3fi q3fi-matched';
+            q3OvActiveF=null;
+            document.querySelectorAll('.q3fi').forEach(e=>{
+                if(!e.classList.contains('q3fi-matched'))e.className='q3fi';
+            });
+        };
+        lb.appendChild(gb);
+    });
+
+    // D: 수식 목록
+    const fl=el('q3-formula-list');
+    fl.innerHTML=''; fl.style.display='flex';
+    qData.formulas.forEach((f,idx)=>{
+        const fi=document.createElement('div');
+        fi.className='q3fi'; fi.id='q3ov_fi_'+idx;
+        const txtSpan=document.createElement('span'); txtSpan.innerText=f.text;
+        const arrSpan=document.createElement('span');
+        arrSpan.className='q3fi-arrow'; arrSpan.id='q3fi_arr_'+idx; arrSpan.innerText='──────';
+        fi.appendChild(txtSpan); fi.appendChild(arrSpan);
+        fi.onclick=()=>{
+            document.querySelectorAll('.q3fi').forEach(e=>{
+                if(!e.classList.contains('q3fi-matched'))e.className='q3fi';
+            });
+            fi.classList.add('q3fi-active');
+            q3OvActiveF=idx;
+        };
+        fl.appendChild(fi);
+    });
+    el('q3-submit-btn').style.display='block';
+}
+// ─── Q3 공통: 정답/오답 처리 ──────────────────────────────────────────────
+function q3Correct(nextFn){
+    q3OvCorrect++;gd.q3.c++;addGold(10);
+    pHP=Math.min(100,pHP+25);updateUI(); // HP 25 회복
+    el('q3-hint-msg').style.color='#2ecc71';
+    el('q3-hint-msg').innerText='✔ 정답! HP 회복!';
+    q3QWrong=0;
+    setTimeout(()=>nextFn(),1600);
+}
+
+function q3Wrong(retryFn,nextFn,hint){
+    q3QWrong++;gd.q3.w++;
+    pHP=Math.max(0,pHP-25);updateUI(); // HP 25 감소
+    if(pHP<=0){
+        el('q3-overlay').style.display='none';
+        showOv("assets/m_secret1.png","비밀번호를 풀지 못해\n마법의 숲으로 들어갈 수 없습니다...\n여기까지의 결과를 확인해보세요.",()=>{showFeedback();});
+        return;
+    }
+    if(q3QWrong===1){
+        el('q3-hint-msg').style.color='#f39c12';
+        el('q3-hint-msg').innerText='💡 '+hint+' HP -20!';
+        setTimeout(()=>retryFn(),2500);
+    } else {
+        el('q3-hint-msg').style.color='#e74c3c';
+        el('q3-hint-msg').innerText='✘ 2회 오답. 다음 문제로 이동합니다.';
+        q3QWrong=0;
+        setTimeout(()=>nextFn(),2000);
+    }
+}
+
+// 순서형 채점
+function checkOrderQ(qData,nextFn){
+    if(q3OvSel.length<4){showSmall("4개를 모두 선택하세요!","yellow");return;}
+    const ok=qData.answer.every((v,i)=>v===q3OvSel[i]);
+    if(ok){
+        q3Correct(nextFn);
+    } else {
+        q3Wrong(
+            ()=>{q3OvSel=[];qData.graphs.forEach(g=>{const b=el('q3ov_gb_'+g.label);if(b)b.classList.remove('selected');const bd=el('q3ov_badge_'+g.label);if(bd)bd.innerText='';});},
+            nextFn,
+            'a>0:아래볼록, a<0:위볼록. |a|클수록 폭 좁음. 가장 큰 a부터!'
+        );
+    }
+}
+
+// 짝짓기 채점
+function checkMatchQ(qData,retryFn,nextFn){
+    if(Object.keys(q3OvMatches).length<4){showSmall("4쌍을 모두 연결하세요!","yellow");return;}
+    let ok=true;
+    for(let i=0;i<4;i++)if(q3OvMatches[i]!==qData.answer[i]){ok=false;break;}
+    if(ok){
+        q3Correct(nextFn);
+    } else {
+        q3Wrong(
+            ()=>{q3OvMatches={};q3OvActiveF=null;retryFn();},
+            nextFn,
+            'a>0:아래볼록(U자), a<0:위볼록(∩자). |a|클수록 폭 좁음!'
+        );
+    }
+}
+
+function submitQ3Ov(){
+    const step=q3OvStep;
+    if(step===1){
+        // 문제1: 순서형
+        checkOrderQ(q3OvQ1,()=>{q3QWrong=0;q3OvStep=2;setupQ3OvStep4_as2();});
+    } else if(step===2){
+        // 문제2: 순서형 (구 4번)
+        checkOrderQ(q3OvQ4,()=>{q3QWrong=0;q3OvStep=3;setupQ3OvMatch(3,q3OvQ3);});
+    } else if(step===3){
+        // 문제3: 짝짓기
+        checkMatchQ(q3OvQ3,()=>setupQ3OvMatch(3,q3OvQ3),()=>{q3QWrong=0;q3OvStep=4;setupQ3OvMatch(4,q3OvQ2);});
+    } else if(step===4){
+        // 문제4: 짝짓기 (구 2번)
+        checkMatchQ(q3OvQ2,()=>setupQ3OvMatch(4,q3OvQ2),()=>{q3QWrong=0;q3OvStep=5;setupQ3OvMatch(5,q3OvQ5);});
+    } else {
+        // 문제5: 짝짓기
+        checkMatchQ(q3OvQ5,()=>setupQ3OvMatch(5,q3OvQ5),()=>finishQ3Ov());
+    }
+}
+
+function finishQ3Ov(){
+    el('q3-overlay').style.display='none';
+    // HP > 0이면 통과 (HP가 0이 되면 q3Wrong()에서 이미 처리)
+    if(pHP>0){
+        markQuestPassed(3);
+        showOvContain("assets/bless1.png",
+            "🌿 숲의 정령이 나타나\n용사의 검에 마법의 기운을 불어넣어줍니다!",
+            ()=>{
+                el('full-overlay').style.backgroundImage='none';
+                el('full-overlay').style.backgroundColor='rgba(0,0,0,0.92)';
+                el('full-overlay').style.display='block';
+                el('overlay-msg').innerText='용사의 모험은 계속됩니다..';
+                el('overlay-msg').style.fontSize='44px';
+                el('overlay-msg').style.top='50%';
+                el('overlay-msg').style.bottom='auto';
+                el('overlay-msg').style.transform='translateY(-50%)';
+                el('overlay-msg').style.display='block';
+                setTimeout(()=>{
+                    el('full-overlay').style.display='none';
+                    el('full-overlay').style.backgroundColor='';
+                    el('overlay-msg').style.display='none';
+                    startQ4();
+                },3000);
+            }
+        );
+    } else {
+        showOv("assets/m_secret1.png",
+            "🌲 마법의 숲이 길을 막아버렸다!\n몬스터의 성으로 가기 위해 반드시 지나야 하는\n마법의 숲에 들어가지 못했습니다...",
+            ()=>{showFeedback();}
+        );
+    }
+}
+
+
+/* ================================================================
+   QUEST 4: 평행이동 — 바위(그래프) 굴리기  (10문제, 랜덤)
+================================================================ */
+
+const Q4_CX=500, Q4_CY=280, Q4_UNIT=52;
+
+// a 후보 (유리수)
+const q4APool=[1,-1,2,-2,0.5,-0.5,1.5,-1.5,0.25,-0.25,3,-3];
+
+// 랜덤 부호가 있는 정수 (0 제외)
+function randNZ(min,max){
+    let v=0;while(v===0)v=Math.round(Math.random()*(max-min)+min);return v;
+}
+function randA(){ return q4APool[Math.floor(Math.random()*q4APool.length)]; }
+
+// 문제 생성 (10개)
+function genQ4Problems(){
+    const probs=[];
+    // 1번: y축 방향만 (p=0, q≠0) - 입력
+    probs.push({a:randA(),p:0,q:randNZ(-4,4),type:'input'});
+    // 2번: x축 방향만 (p≠0, q=0) - 입력
+    probs.push({a:randA(),p:randNZ(-4,4),q:0,type:'input'});
+    // 3~5번: p,q 모두 0이 아닌 - 입력
+    for(let i=0;i<3;i++)
+        probs.push({a:randA(),p:randNZ(-3,3),q:randNZ(-3,3),type:'input'});
+    // 6번: y축 방향만 (p=0, q≠0) - 드래그
+    probs.push({a:randA(),p:0,q:randNZ(-4,4),type:'drag'});
+    // 7번: x축 방향만 (p≠0, q=0) - 드래그
+    probs.push({a:randA(),p:randNZ(-4,4),q:0,type:'drag'});
+    // 8~10번: p,q 모두 0이 아닌 - 드래그
+    for(let i=0;i<3;i++)
+        probs.push({a:randA(),p:randNZ(-3,3),q:randNZ(-3,3),type:'drag'});
+    return probs;
+}
+
+let q4Problems=[], q4Idx=0, q4WrongPerQ=0;
+let q4DragOffsetP=0, q4DragOffsetQ=0;
+let q4Dragging=false, q4DragStartX=0, q4DragStartY=0;
+let q4DragBaseP=0, q4DragBaseQ=0;
+
+function aDisp(a){
+    if(a===1) return ''; if(a===-1) return '-';
+    if(Number.isInteger(a)) return String(a);
+    // 분수는 반드시 괄호 처리
+    const frac={'0.5':'(1/2)','-0.5':'(-1/2)','1.5':'(3/2)','-1.5':'(-3/2)',
+                '0.25':'(1/4)','-0.25':'(-1/4)','0.75':'(3/4)','-0.75':'(-3/4)'};
+    return frac[String(a)]||'('+a+')';
+}
+function buildQ4F(a,p,q){
+    return fmtStandard(a,p,q);
+}
+
+function updateQ4HP(){
+    const pct=pHP+'%';
+    const fill=el('q4-hp-fill'); if(fill)fill.style.width=pct;
+    const num=el('q4-hp-num'); if(num)num.innerText=pHP;
+    const col=pHP>50?'#e74c3c':pHP>25?'#f39c12':'#c0392b';
+    if(fill)fill.style.background=`linear-gradient(to right,${col},#7b241c)`;
+    if(num)num.style.color=col;
+}
+
+function startQ4(){
+    currentQuest=4; currentLevel=4;
+    q4Problems=genQ4Problems();
+    q4Idx=0;
+    showTopUI(false);
+    el('q3-overlay').style.display='none';
+    el('feedback-screen').style.display='none';
+    el('knight').style.display='none';
+    el('target').style.display='none';
+    el('q4-overlay').style.display='block';
+    updateQ4HP();
+    showOv('assets/push.png',
+        '🪨 QUEST 4: 바위 굴리기 (평행이동)\n\n바위가 길을 막고 있다!\ny=ax²을 평행이동하여 목표 위치로 이동시키세요.\nx축 방향으로 p만큼, y축 방향으로 q만큼!\n1~5번: 이동량 입력 / 6~10번: 드래그로 이동\n\n총 10문제!',
+        ()=>setupQ4(), false, '▶ 시작하기'
+    );
+}
+
+function setupQ4(){
+    const prob=q4Problems[q4Idx];
+    q4DragOffsetP=0; q4DragOffsetQ=0;
+    q4DragBaseP=0; q4DragBaseQ=0;
+    q4WrongPerQ=0;
+    disableQ4Drag();
+
+    el('q4-progress').innerText=`문제 ${q4Idx+1} / ${q4Problems.length}`;
+    el('q4-msg').innerText='';
+
+    // 문제 지문
+    const srcF='y = '+aDisp(prob.a)+'x²';
+    const tgtF=buildQ4F(prob.a,prob.p,prob.q);
+    el('q4-info').innerText=`${srcF}  →  ${tgtF}`;
+
+    // 입력/드래그 전환
+    const isInput=prob.type==='input';
+    el('q4-input-row').style.display=isInput?'flex':'none';
+    el('q4-drag-row').style.display=isInput?'none':'flex';
+    if(isInput){
+        el('q4-inp-p').value=''; el('q4-inp-q').value='';
+    } else {
+        setupQ4Drag();
+    }
+
+    drawQ4Grid();
+    drawQ4Graphs(prob,0,0);
+}
+
+function drawQ4Grid(){
+    const cv=el('q4-canvas-bg'), ctx2=cv.getContext('2d');
+    const W=cv.width,H=cv.height;
+    ctx2.clearRect(0,0,W,H);
+    // 격자
+    ctx2.strokeStyle='rgba(255,255,255,0.1)';ctx2.lineWidth=0.7;
+    for(let i=-9;i<=9;i++){
+        ctx2.beginPath();ctx2.moveTo(Q4_CX+i*Q4_UNIT,0);ctx2.lineTo(Q4_CX+i*Q4_UNIT,H);ctx2.stroke();
+    }
+    for(let j=-5;j<=5;j++){
+        ctx2.beginPath();ctx2.moveTo(0,Q4_CY-j*Q4_UNIT);ctx2.lineTo(W,Q4_CY-j*Q4_UNIT);ctx2.stroke();
+    }
+    // 축
+    ctx2.strokeStyle='rgba(255,255,255,0.65)';ctx2.lineWidth=2;
+    ctx2.beginPath();ctx2.moveTo(0,Q4_CY);ctx2.lineTo(W,Q4_CY);ctx2.stroke();
+    ctx2.beginPath();ctx2.moveTo(Q4_CX,0);ctx2.lineTo(Q4_CX,H);ctx2.stroke();
+    // 화살표
+    ctx2.fillStyle='rgba(255,255,255,0.65)';
+    ctx2.beginPath();ctx2.moveTo(W-4,Q4_CY);ctx2.lineTo(W-13,Q4_CY-5);ctx2.lineTo(W-13,Q4_CY+5);ctx2.fill();
+    ctx2.beginPath();ctx2.moveTo(Q4_CX,2);ctx2.lineTo(Q4_CX-5,13);ctx2.lineTo(Q4_CX+5,13);ctx2.fill();
+    // 숫자
+    ctx2.fillStyle='rgba(255,255,255,0.8)';ctx2.font='bold 12px Arial';ctx2.textAlign='center';
+    for(let i=-8;i<=8;i++){
+        if(i===0)continue;
+        if(Math.abs(i)%2===0){ctx2.fillText(String(i),Q4_CX+i*Q4_UNIT,Q4_CY+17);}
+    }
+    ctx2.textAlign='right';
+    for(let j=-4;j<=4;j++){
+        if(j===0)continue;
+        ctx2.fillText(String(j),Q4_CX-6,Q4_CY-j*Q4_UNIT+5);
+    }
+    ctx2.textAlign='right';ctx2.fillStyle='rgba(200,200,200,0.6)';
+    ctx2.fillText('O',Q4_CX-5,Q4_CY+16);
+}
+
+function drawQ4Graphs(prob,dragP,dragQ){
+    const cb=el('q4-canvas-base').getContext('2d');
+    const cd=el('q4-canvas-drag').getContext('2d');
+    const W=1000,H=570;
+    cb.clearRect(0,0,W,H);cd.clearRect(0,0,W,H);
+    const a=prob.a;
+
+    // 원본 y=ax² (파란색)
+    drawParaQ4(cb,'#4fc3f7',4,a,0,0);
+
+    // 목표 그래프: 입력 문제만 주황색으로 표시, 드래그 문제는 숨김
+    if(prob.type==='input'){
+        drawParaQ4(cb,'rgba(255,160,30,0.7)',3,a,prob.p,prob.q);
+        // 목표 꼭짓점 마크
+        const tvx=Q4_CX+prob.p*Q4_UNIT;
+        const tvy=Q4_CY-prob.q*Q4_UNIT;
+        cb.fillStyle='rgba(255,160,30,0.9)';
+        cb.beginPath();cb.arc(tvx,tvy,7,0,Math.PI*2);cb.fill();
+    }
+
+    // 드래그 그래프 (초록, 실시간)
+    if(prob.type==='drag'){
+        drawParaQ4(cd,'rgba(80,230,120,0.95)',4,a,dragP,dragQ);
+        const vx=Q4_CX+dragP*Q4_UNIT, vy=Q4_CY-dragQ*Q4_UNIT;
+        cd.fillStyle='#2ecc71';
+        cd.beginPath();cd.arc(vx,vy,8,0,Math.PI*2);cd.fill();
+        // 꼭짓점 좌표 표시
+        cd.fillStyle='#fff';cd.font='bold 13px Arial';cd.textAlign='left';
+        cd.fillText(`꼭짓점: (${dragP}, ${dragQ})`,vx+10,vy-10);
+    }
+
+    // 범례
+    cb.font='bold 13px Arial';cb.textAlign='left';
+    cb.fillStyle='#4fc3f7';
+    cb.fillText('━ 원본 y=ax²',12,22);
+    if(prob.type==='input'){
+        cb.fillStyle='rgba(255,160,30,0.95)';
+        cb.fillText('━ 목표 위치',12,42);
+    }
+    if(prob.type==='drag'){
+        cd.font='bold 13px Arial';cd.textAlign='left';
+        cd.fillStyle='rgba(80,230,120,0.95)';
+        cd.fillText('━ 이동 중인 그래프',12,42);
+    }
+}
+
+function drawParaQ4(ctx2,color,lw,a,p,q){
+    ctx2.strokeStyle=color;ctx2.lineWidth=lw;
+    ctx2.shadowColor=color;ctx2.shadowBlur=5;
+    ctx2.beginPath();let first=true;
+    for(let x=-10;x<=10;x+=0.05){
+        const y=a*Math.pow(x-p,2)+q;
+        const sx=Q4_CX+x*Q4_UNIT,sy=Q4_CY-y*Q4_UNIT;
+        if(sy<-8||sy>578||sx<-8||sx>1008){first=true;continue;}
+        first?ctx2.moveTo(sx,sy):ctx2.lineTo(sx,sy);first=false;
+    }
+    ctx2.stroke();ctx2.shadowBlur=0;
+}
+
+function setupQ4Drag(){
+    const cv=el('q4-canvas-drag');
+    cv.style.pointerEvents='all';cv.style.cursor='grab';
+    cv.onmousedown=(e)=>{
+        q4Dragging=true;
+        const r=cv.getBoundingClientRect();
+        q4DragStartX=e.clientX-r.left;q4DragStartY=e.clientY-r.top;
+        q4DragBaseP=q4DragOffsetP;q4DragBaseQ=q4DragOffsetQ;
+        cv.style.cursor='grabbing';
+    };
+    cv.onmousemove=(e)=>{
+        if(!q4Dragging)return;
+        const r=cv.getBoundingClientRect();
+        const dx=(e.clientX-r.left)-q4DragStartX;
+        const dy=(e.clientY-r.top)-q4DragStartY;
+        q4DragOffsetP=Math.round(q4DragBaseP+dx/Q4_UNIT);
+        q4DragOffsetQ=Math.round(q4DragBaseQ-dy/Q4_UNIT);
+        drawQ4Graphs(q4Problems[q4Idx],q4DragOffsetP,q4DragOffsetQ);
+        updateQ4HP();
+    };
+    cv.onmouseup=()=>{q4Dragging=false;cv.style.cursor='grab';};
+    cv.onmouseleave=()=>{q4Dragging=false;cv.style.cursor='grab';};
+    cv.ontouchstart=(e)=>{
+        const t=e.touches[0],r=cv.getBoundingClientRect();
+        q4Dragging=true;
+        q4DragStartX=t.clientX-r.left;q4DragStartY=t.clientY-r.top;
+        q4DragBaseP=q4DragOffsetP;q4DragBaseQ=q4DragOffsetQ;
+    };
+    cv.ontouchmove=(e)=>{
+        if(!q4Dragging)return;e.preventDefault();
+        const t=e.touches[0],r=cv.getBoundingClientRect();
+        q4DragOffsetP=Math.round(q4DragBaseP+(t.clientX-r.left-q4DragStartX)/Q4_UNIT);
+        q4DragOffsetQ=Math.round(q4DragBaseQ-(t.clientY-r.top-q4DragStartY)/Q4_UNIT);
+        drawQ4Graphs(q4Problems[q4Idx],q4DragOffsetP,q4DragOffsetQ);
+    };
+    cv.ontouchend=()=>{q4Dragging=false;};
+}
+
+function disableQ4Drag(){
+    const cv=el('q4-canvas-drag');
+    if(!cv)return;
+    cv.onmousedown=null;cv.onmousemove=null;cv.onmouseup=null;cv.onmouseleave=null;
+    cv.ontouchstart=null;cv.ontouchmove=null;cv.ontouchend=null;
+    cv.style.cursor='default';cv.style.pointerEvents='none';
+}
+
+function submitQ4(){
+    const prob=q4Problems[q4Idx];
+    let ansP,ansQ;
+    if(prob.type==='input'){
+        ansP=parseInt(el('q4-inp-p').value);
+        ansQ=parseInt(el('q4-inp-q').value);
+        if(isNaN(ansP)||isNaN(ansQ)){
+            el('q4-msg').style.color='#f39c12';
+            el('q4-msg').innerText='숫자를 모두 입력하세요!';return;
+        }
+    } else {
+        ansP=q4DragOffsetP; ansQ=q4DragOffsetQ;
+    }
+
+    if(ansP===prob.p&&ansQ===prob.q){
+        // ── 정답 ──────────────────────────────────────────────────────────────
+        gd.q4.c++;pHP=Math.min(100,pHP+25);addGold(10);updateQ4HP();updateUI();
+        disableQ4Drag();
+        if(prob.type==='drag') drawQ4Graphs(prob,prob.p,prob.q);
+
+        // 이동량 + 축의 방정식 + 꼭짓점 좌표 안내
+        const pSign=prob.p>0?`+${prob.p}`:String(prob.p);
+        const qSign=prob.q>0?`+${prob.q}`:String(prob.q);
+        const axisEq=prob.p===0?'x = 0':`x = ${prob.p}`;
+        const vtx=`(${prob.p}, ${prob.q})`;
+        el('q4-msg').style.color='#2ecc71';
+        el('q4-msg').innerText=
+            `✔ 정답!  x축으로 ${pSign}, y축으로 ${qSign} 이동`+
+            `  |  축의 방정식: ${axisEq}  |  꼭짓점: ${vtx}`;
+        setTimeout(()=>nextQ4(),2200);
+
+    } else {
+        // ── 오답 ──────────────────────────────────────────────────────────────
+        gd.q4.w++;pHP=Math.max(0,pHP-25);updateQ4HP();updateUI();
+        if(pHP<=0){
+            el('q4-msg').style.color='#e74c3c';
+            el('q4-msg').innerText='HP가 0이 되었습니다...';
+            setTimeout(()=>failQ4(),1400);return;
+        }
+        q4WrongPerQ++;
+        if(q4WrongPerQ===1){
+            // 첫 번째 오답: 개념 힌트 (답 직접 X)
+            el('q4-msg').style.color='#f39c12';
+            el('q4-msg').innerText=
+                '💡 힌트: y=a(x-p)²+q 는 y=ax²의 그래프를 '+
+                'x축 방향으로 p만큼, y축 방향으로 q만큼 평행이동한 그래프입니다.';
+            // 드래그: 위치만 리셋
+            if(prob.type==='drag'){
+                setTimeout(()=>{
+                    q4DragOffsetP=0;q4DragOffsetQ=0;
+                    drawQ4Graphs(prob,0,0);
+                },1600);
+            }
+        } else {
+            // 두 번째 오답: 다음 문제로
+            el('q4-msg').style.color='#e74c3c';
+            el('q4-msg').innerText='✘ 2회 오답 — 다음 문제로 넘어갑니다.';
+            disableQ4Drag();
+            setTimeout(()=>nextQ4(),1800);
+        }
+    }
+}
+
+function nextQ4(){
+    q4Idx++;
+    if(q4Idx>=q4Problems.length) finishQ4();
+    else setupQ4();
+}
+
+function finishQ4(){
+    disableQ4Drag();
+    el('q4-overlay').style.display='none';
+    if(gd.q4.w===0)addGold(100);
+    markQuestPassed(4);
+    showOvFB('assets/success.png','바위를 모두 굴렸습니다!\n길이 열렸습니다! 이제 마법의 숲으로...!'+(gd.q4.w===0?' 🌟퍼펙트! +100G':''),
+        ()=>startUnicornScene());
+}
+
+function failQ4(){
+    disableQ4Drag();
+    el('q4-overlay').style.display='none';
+    showOv('assets/dizzy.png','체력이 소진되었다..\n바위를 밀지 못해서 더 이상 길을 나아갈 수 없다.\n여기까지의 결과를 확인해보세요.',()=>showFeedback());
+}
+
+
+/* ================================================================
+   유니콘 씬 (Q4 통과 후)
+================================================================ */
+const unicornFrames = [
+    { src:'assets/unicorn1.png', msg:'숲 속에서 신비로운 유니콘이 나타났다!' },
+    { src:'assets/unicorn2.png', msg:'용사는 조심스럽게 유니콘에게 다가갔다.' },
+    { src:'assets/unicorn3.png', msg:'유니콘이 용사를 등에 태우고 힘차게 도약했다!' },
+    { src:'assets/unicorn4.png', msg:'유니콘과 용사는 하늘을 가르며 몬스터의 성으로 날아올랐다!' },
+    { src:'assets/unicorn5.png', msg:'유니콘과 용사는 마침내 몬스터의 성 앞에 다다랐다!' },
+];
+const unicornSpeech = '"용감한 용사여,\n나의 시험을 통과하면 그대에게 마법의 힘을 주리라."';
+
+function startUnicornScene(){
+    // Q1/Q2/Q3/Q4 화면 완전 숨기기
+    el('full-overlay').style.display='none';
+    el('overlay-msg').style.display='none';
+    el('bg-layer').style.backgroundImage='none';
+    el('bg-layer').style.background='#000';
+    el('knight').style.display='none';
+    el('target').style.display='none';
+    el('grid-layer').style.display='none';
+    el('graph-layer').style.display='none';
+    el('bottom-panel').style.display='none';
+    el('top-ui').style.display='none';
+    el('q4-overlay').style.display='none';
+    el('q3-overlay').style.display='none';
+    // 유니콘 씬 표시
+    const scr=el('unicorn-scene');
+    scr.style.display='flex';
+    scr.style.opacity='1';
+    scr.style.background='#000';
+    playUFrame(0);
+}
+
+function playUFrame(idx){
+    const scr=el('unicorn-scene');
+    if(idx>=unicornFrames.length){
+        // 5씬 끝 → 검은 화면에 유니콘 대사 후 Q45 시작
+        // 이미지 숨기고 검은 배경 유지
+        el('unicorn-img').src='';
+        el('unicorn-img').style.visibility='hidden';
+        scr.style.background='#000';
+        scr.style.opacity='1';
+        el('unicorn-msg').innerText=unicornSpeech;
+        el('unicorn-msg').style.fontSize='22px';
+        setTimeout(()=>{
+            el('unicorn-img').style.visibility='';
+            scr.style.display='none';
+            startQ45();
+        },4500);
+        return;
+    }
+    const f=unicornFrames[idx];
+    // 이미지 교체 (배경은 항상 #000 유지 → 다른 화면 절대 비치지 않음)
+    scr.style.background='#000';
+    scr.style.opacity='0';
+    scr.style.transition='opacity 0.4s';
+    el('unicorn-img').src=f.src;
+    el('unicorn-img').style.visibility='visible';
+    el('unicorn-msg').innerText=f.msg;
+    el('unicorn-msg').style.fontSize='20px';
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{scr.style.opacity='1';}));
+    const dur=Math.min(5000,Math.max(3500,f.msg.length*70));
+    setTimeout(()=>{
+        scr.style.opacity='0';
+        setTimeout(()=>playUFrame(idx+1),450);
+    },dur);
+}
+/* ================================================================
+   QUEST 4.5: 일반형 y=ax²+bx+c → 표준형 y=a(x-p)²+q  빈칸 채우기
+================================================================ */
+
+// 랜덤 문제 생성
+// 표준형 y=a(x-p)²+q → 전개하면 y=ax²-2apx+(ap²+q)
+// b=-2ap, c=ap²+q 이므로 b는 -2ap, c는 ap²+q
+
+function randInt(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
+function randNonZero(min,max){
+    let v=0; while(v===0) v=randInt(min,max); return v;
+}
+// 수식 표시 헬퍼
+function fmtA(a){ // x² 계수 표시 (분수는 괄호, 소수는 그대로)
+    if(a===1) return ''; if(a===-1) return '-';
+    if(Number.isInteger(a)) return String(a);
+    // 분수 표현이 있는 값만 괄호
+    const fracs={'0.5':'(1/2)','-0.5':'(-1/2)','1.5':'(3/2)','-1.5':'(-3/2)','0.25':'(1/4)','-0.25':'(-1/4)','0.75':'(3/4)','-0.75':'(-3/4)'};
+    const key=String(a);
+    if(fracs[key]) return fracs[key];
+    // 그 외 소수: 괄호 없이
+    return String(a);
+}
+function fmtGeneral(a,b,c){ // y=ax²+bx+c, 계수 1/-1 생략, c=0 생략
+    let s='y = '+fmtA(a)+'x²';
+    if(b!==0){
+        const bAbs=Math.abs(b);
+        const bIsInt=Number.isInteger(b);
+        // 분수 표현 매핑
+        const fracs={'0.5':'(1/2)','1.5':'(3/2)','0.25':'(1/4)','0.75':'(3/4)'};
+        let bAbsStr;
+        if(bAbs===1) bAbsStr='';
+        else if(bIsInt) bAbsStr=String(bAbs);
+        else if(fracs[String(bAbs)]) bAbsStr=fracs[String(bAbs)];
+        else bAbsStr=String(bAbs); // 소수는 괄호 없이
+        if(b>0) s+=` + ${bAbsStr}x`;
+        else s+=` - ${bAbsStr}x`;
+    }
+    if(c!==0) s+=c>0?` + ${c}`:` - ${Math.abs(c)}`;
+    return s;
+}
+function fmtStandard(a,p,q){ // y=a(x-p)²+q, p=0→ax², q=0 생략
+    const as=fmtA(a);
+    if(p===0&&q===0) return `y = ${as}x²`;
+    if(p===0) return `y = ${as}x² ${q>0?'+ '+q:'- '+Math.abs(q)}`;
+    const px=p>0?` - ${p}`:` + ${Math.abs(p)}`;
+    let s=`y = ${as}(x${px})²`;
+    if(q!==0) s+=q>0?` + ${q}`:` - ${Math.abs(q)}`;
+    return s;
+}
+
+/* ── 인라인 빈칸 빌더: lines의 [①][②]... → <input> 으로 치환 ── */
+function buildInlineQ(prefix, prob){
+    // blanks 배열 순서대로 input을 생성
+    // 같은 라벨이 여러 번 나오면 각각 별도 input
+    let inputIdx=0;
+    const inpStyle=`style="width:52px;font-size:15px;text-align:center;border-radius:5px;`+
+        `border:2px solid #9b59b6;background:#1a0a2e;color:#fff;padding:2px 0;`+
+        `font-weight:bold;vertical-align:middle;"`;
+
+    // 각 줄을 <div>로 묶고 빈칸을 input으로 교체
+    const lines=prob.lines.map(line=>{
+        // [①], [②], [③] 등을 순서대로 input으로 교체
+        let html=line
+            .replace(/</g,'&lt;').replace(/>/g,'&gt;')  // HTML 이스케이프
+            .replace(/²/g,'²').replace(/\n/g,'<br>');
+        // [①②③...] 패턴 치환
+        html=html.replace(/\[([①②③④⑤⑥])\]/g, ()=>{
+            const id=`${prefix}-inp-inline-${inputIdx++}`;
+            return `<input class="${prefix}-inp-inline" id="${id}" type="text" inputmode="decimal" pattern="-?[0-9.]*" placeholder="?" ${inpStyle}>`;
+        });
+        return `<div style="font-size:15px;color:#f1c40f;font-weight:bold;line-height:2.2;font-family:monospace;">${html}</div>`;
+    });
+    return lines.join('');
+}
+
+
+function genQ45Problems(){
+    const probs=[];
+
+    // a=1: 문제 1,2 (매번 새 랜덤값)
+    for(let i=0;i<2;i++){
+        const p=randNonZero(-5,5);
+        const q=randNonZero(-8,8);
+        const b=-2*p, cv=p*p+q;
+        const halfB=b/2, halfBsq=halfB*halfB;
+        const bStr=b>0?`+${b}`:String(b);
+        const cStr=cv>0?`+${cv}`:cv<0?String(cv):'';
+        const gen=fmtGeneral(1,b,cv);
+        probs.push({
+            a:1, p, q, b, c:cv,
+            lines:[
+                `${gen}`,
+                `  = x² ${bStr}x + [①] - [①] ${cStr}`,
+                `  = (x + [②])² + [③]`,
+            ],
+            answerSeq:[halfBsq, halfBsq, halfB, q],
+            hint:'💡 x²+bx에 (b/2)²을 더하고 빼면 완전제곱식 (x+b/2)²을 만들 수 있어요.\n(b÷2)²을 직접 계산해서 빈칸에 넣으세요.'
+        });
+    }
+
+    // a≠1: 문제 3,4,5 (매번 새 랜덤값)
+    const aPool=[2,-1,3,-2];
+    const usedA=new Set();
+    for(let i=0;i<3;i++){
+        let a; do{a=aPool[Math.floor(Math.random()*aPool.length)];}while(usedA.has(a));
+        usedA.add(a);
+        const p=randNonZero(-4,4), q=randNonZero(-6,6);
+        const b=-2*a*p, cv=a*p*p+q;
+        const bOverA=b/a, halfBoverA=bOverA/2, halfSq=halfBoverA*halfBoverA;
+        const as=fmtA(a);
+        const baStr=bOverA>0?`+${bOverA}`:String(bOverA);
+        const cStr=cv>0?`+${cv}`:cv<0?String(cv):'';
+        const gen=fmtGeneral(a,b,cv);
+        probs.push({
+            a, p, q, b, c:cv,
+            lines:[
+                `${gen}`,
+                `  = ${as}(x² ${baStr}x) ${cStr}`,
+                `  = ${as}(x² ${baStr}x + [①] - [①]) ${cStr}`,
+                `  = ${as}(x + [②])² + [③]`,
+            ],
+            answerSeq:[halfSq, halfSq, halfBoverA, q],
+            hint:`💡 먼저 ${as}를 공통인수로 묶은 뒤, x의 계수 ${bOverA}의 절반인 ${halfBoverA}을 이용해 완전제곱식을 만드세요.`
+        });
+    }
+    return probs;
+}
+let q45Problems=[], q45Idx=0, q45WrongPerQ=0;
+let hasWeapon=false; // 마법 무기 획득 여부
+
+function startQ45(){
+    currentQuest=4.5; currentLevel=4;
+    q45Problems=genQ45Problems();
+    q45Idx=0; q45WrongPerQ=0;
+    el('q45-overlay').style.display='block';
+    el('unicorn-scene').style.display='none';
+    updateQ45HP();
+    showOv('assets/unicornq.png',
+        '🦄 QUEST 4.5: 유니콘의 시험\n\n일반형 y=ax²+bx+c를 표준형으로 변환하세요.\n완전제곱식을 만들어 빈칸을 채우세요!\n\n총 5문제!',
+        ()=>setupQ45(), false, '▶ 시작하기'
+    );
+}
+
+function updateQ45HP(){
+    const f=el('q45-hp-fill'); const n=el('q45-hp-num');
+    if(f)f.style.width=pHP+'%';
+    if(n)n.innerText=pHP;
+    const col=pHP>50?'#9b59b6':pHP>25?'#f39c12':'#e74c3c';
+    if(f)f.style.background=`linear-gradient(to right,${col},#4a0080)`;
+    if(n)n.style.color=col;
+}
+
+function setupQ45(){
+    const prob=q45Problems[q45Idx];
+    q45WrongPerQ=0;
+    el('q45-prog').innerText=`문제 ${q45Idx+1} / ${q45Problems.length}`;
+    el('q45-msg').innerText='';
+    el('q45-blanks').innerHTML=''; // 더 이상 사용 안 함
+
+    // 문제를 인라인 입력 칸이 포함된 HTML로 표시
+    el('q45-problem').innerHTML=buildInlineQ('q45',prob);
+    updateQ45HP();
+}
+
+function submitQ45(){
+    const prob=q45Problems[q45Idx];
+    // 모든 빈칸 값 수집
+    // 인라인 입력 수집 (순서대로)
+    const inps=el('q45-problem').querySelectorAll('input.q45-inp-inline');
+    const answers=[...inps].map(inp=>parseFloat(inp.value));
+    if(answers.some(v=>isNaN(v))){
+        el('q45-msg').style.color='#f39c12';
+        el('q45-msg').innerText='모든 빈칸을 채워주세요!'; return;
+    }
+    // 정답 확인: answerSeq와 inputs 순서가 1:1 대응
+    if(answers.length!==prob.answerSeq.length){
+        el('q45-msg').style.color='#f39c12';
+        el('q45-msg').innerText=`빈칸 수 불일치 (${answers.length}/${prob.answerSeq.length}). 새로고침 후 다시 시도하세요.`; return;
+    }
+    const allCorrect=prob.answerSeq.every((ans,i)=>Math.abs(answers[i]-ans)<0.01);
+
+    if(allCorrect){
+        gd.q45.c++;pHP=Math.min(100,pHP+25);addGold(10);updateQ45HP();updateUI();
+        // 표준형 완성 표시
+        const aStr=prob.a===1?'':prob.a===-1?'-':String(prob.a);
+        const pSign=prob.p>0?`- ${prob.p}`:`+ ${Math.abs(prob.p)}`;
+        const qSign=prob.q>=0?`+ ${prob.q}`:String(prob.q);
+        el('q45-msg').style.color='#2ecc71';
+        el('q45-msg').innerText=`✔ 정답! → y = ${aStr}(x ${pSign})² ${qSign}\n꼭짓점: (${prob.p}, ${prob.q})  |  축의 방정식: x = ${prob.p}`;
+        setTimeout(()=>nextQ45(),2500);
+    } else {
+        gd.q45.w++;pHP=Math.max(0,pHP-25);updateQ45HP();updateUI();
+        if(pHP<=0){
+            el('q45-msg').style.color='#e74c3c';
+            el('q45-msg').innerText='HP가 0이 되었습니다...';
+            setTimeout(()=>failQ45(),1400); return;
+        }
+        q45WrongPerQ++;
+        if(q45WrongPerQ===1){
+            // 1회 오답: 완전제곱식 만드는 방법 힌트
+            el('q45-msg').style.color='#f39c12';
+            el('q45-msg').innerText=prob.hint;
+        } else {
+            // 2회 오답: 다음 문제
+            el('q45-msg').style.color='#e74c3c';
+            el('q45-msg').innerText='✘ 2회 오답 — 다음 문제로 넘어갑니다.';
+            setTimeout(()=>nextQ45(),1800);
+        }
+    }
+}
+
+function nextQ45(){
+    q45Idx++;
+    if(q45Idx>=q45Problems.length) finishQ45();
+    else setupQ45();
+}
+
+function finishQ45(){
+    markQuestPassed(4.5);
+    el('q45-overlay').style.display='none';
+    currentLevel=5;updateUI();
+    // unicorngift: 활과 화살이 잘 보이도록 멘트를 화면 하단에 배치
+    const ov=el('full-overlay');
+    const msg=el('overlay-msg');
+    ov.style.backgroundImage="url('assets/unicorngift.png')";
+    ov.style.backgroundSize='cover';
+    ov.style.backgroundPosition='center';
+    ov.style.display='block';
+    msg.innerText='🦄 "용사여, 이 마법의 활과 화살을 받으시오!\n몬스터를 무찌를 수 있는 힘이 깃들어 있소."\n⬆ LEVEL UP!';
+    msg.style.fontSize='26px';
+    msg.style.top='auto';
+    msg.style.bottom='28px';
+    msg.style.transform='none';
+    msg.style.display='block';
+    setTimeout(()=>{
+        ov.style.display='none';
+        msg.style.top='50%'; msg.style.bottom='auto'; msg.style.transform='translateY(-50%)';
+        msg.style.display='none';
+        hasWeapon=true;
+        startQ5(); // showOvFB는 finishQ45의 full-overlay 방식이므로 별도 처리 없음
+    },5000);
+}
+
+function failQ45(){
+    el('q45-overlay').style.display='none';
+    hasWeapon=false;
+    pHP=50; updateUI();
+    showOv('assets/unicornfail.png',
+        '🦄 "아쉽지만... 아직 준비가 되지 않았군요."\n유니콘이 HP를 50으로 회복시켜 줬다.\n마법의 활과 화살은 얻지 못했지만\n용사는 계속 나아간다!',
+        ()=>startQ5()
+    );
+}
+
+
+/* ================================================================
+   QUEST 5: 슬라임 몬스터 격투 — 표준형 축/꼭짓점 맞추기
+================================================================ */
+const q5APool=[1,-1,2,-2,3,-3,0.5,-0.5];
+
+function genQ5Problems(){
+    const probs=[];
+    function rA(){ return q5APool[Math.floor(Math.random()*q5APool.length)]; }
+
+    // 1,2번: y=ax² (p=0, q=0)
+    for(let i=0;i<2;i++) probs.push({a:rA(),p:0,q:0});
+
+    // 3~6번: p나 q 중 하나만 0
+    for(let i=0;i<4;i++){
+        const a=rA();
+        let p,q;
+        if(i%2===0){ p=randNonZero(-5,5); q=0; }
+        else        { p=0; q=randNonZero(-6,6); }
+        probs.push({a,p,q});
+    }
+
+    // 7~10번: p,q 모두 0이 아닌
+    for(let i=0;i<4;i++){
+        const a=rA();
+        const p=randNonZero(-5,5);
+        const q=randNonZero(-6,6);
+        probs.push({a,p,q});
+    }
+    return probs;
+}
+
+let q5Problems=[], q5Idx=0;
+
+function updateQ5HP(){
+    const lv=el('q5-lv-text');if(lv)lv.innerText=`LV.${currentLevel} 용사`;
+    const f=el('q5-hp-fill'),n=el('q5-hp-num');
+    if(f)f.style.width=pHP+'%';
+    if(n)n.innerText=pHP;
+    const col=pHP>50?'#e74c3c':pHP>25?'#f39c12':'#c0392b';
+    if(f)f.style.background=`linear-gradient(to right,${col},#7b0000)`;
+    if(n)n.style.color=col;
+}
+
+function q5SetChar(knightImg,monsterImg){
+    el('q5-knight').style.backgroundImage=`url('${knightImg}')`;
+    el('q5-monster').style.backgroundImage=`url('${monsterImg}')`;
+}
+
+function startQ5(){
+    currentQuest=5; currentLevel=5;
+    q5Problems=genQ5Problems();
+    q5Idx=0;
+    el('q5-overlay').style.display='block';
+    el('q45-overlay').style.display='none';
+    const q5badge=document.getElementById('q5-item-badge');
+    if(q5badge)q5badge.style.display=hasWeapon?'flex':'none';
+    el('unicorn-scene').style.display='none';
+    el('q4-overlay').style.display='none';
+    el('q3-overlay').style.display='none';
+    el('full-overlay').style.display='none';
+    el('overlay-msg').style.display='none';
+    updateQ5HP(); updateUI();
+    showOv('assets/bg.png',
+        '⚔ QUEST 5: 슬라임 몬스터 격투!\n\ny=a(x-p)²+q 표준형을 보고\n축의 방정식과 꼭짓점 좌표를 입력하세요.\n축의 방정식: x=p  /  꼭짓점: (p,q)\n\n총 10문제!',
+        ()=>setupQ5(), false, '▶ 시작하기'
+    );
+}
+
+function setupQ5(){
+    const prob=q5Problems[q5Idx];
+    el('q5-prog').innerText=`문제 ${q5Idx+1} / ${q5Problems.length}`;
+    el('q5-msg').innerText='';
+    el('q5-inp-axis').value='';
+    el('q5-inp-vx').value='';
+    el('q5-inp-vy').value='';
+    el('q5-attack-btn').disabled=false;
+    q5SetChar('assets/k_solo.jpg','assets/m_ready.png');
+    el('q5-question').innerText=`다음 이차함수의 축의 방정식과 꼭짓점의 좌표를 구하시오.\n${fmtStandard(prob.a,prob.p,prob.q)}`;
+}
+
+function attackQ5(){
+    const prob=q5Problems[q5Idx];
+    const axis=parseFloat(el('q5-inp-axis').value);
+    const vx=parseFloat(el('q5-inp-vx').value);
+    const vy=parseFloat(el('q5-inp-vy').value);
+    if(isNaN(axis)||isNaN(vx)||isNaN(vy)){
+        el('q5-msg').style.color='#f39c12';
+        el('q5-msg').innerText='모든 칸을 입력하세요!'; return;
+    }
+
+    el('q5-attack-btn').disabled=true;
+    // 공격 애니메이션
+    q5SetChar('assets/k_attack1.jpg','assets/m_ready.png');
+
+    const correct=(Math.abs(axis-prob.p)<0.01 && Math.abs(vx-prob.p)<0.01 && Math.abs(vy-prob.q)<0.01);
+    setTimeout(()=>{
+        if(correct){
+            gd.q5.c++; pHP=Math.min(100,pHP+25); addGold(10);
+            updateQ5HP(); updateUI();
+            q5SetChar('assets/k_attack1.jpg','assets/monster_hit.png');
+            el('q5-msg').style.color='#2ecc71';
+            el('q5-msg').innerText=`✔ 공격 성공! 축의 방정식: x=${prob.p}, 꼭짓점: (${prob.p}, ${prob.q})`;
+            setTimeout(()=>nextQ5(),1800);
+        } else {
+            gd.q5.w++; pHP=Math.max(0,pHP-25);
+            updateQ5HP(); updateUI();
+            q5SetChar('assets/k_down.jpg','assets/monster_attack.png');
+            el('q5-msg').style.color='#e74c3c';
+            el('q5-msg').innerText=`✘ 공격 실패. [정답 안내] 축의 방정식: x = ${prob.p}, 꼭짓점: (${prob.p}, ${prob.q})  ← 다음 문제 도전!`;
+            if(pHP<=0){
+                el('q5-overlay').style.display='none';
+                showOv('assets/bg.png','체력이 소진되어 쓰러졌습니다...\n여기까지의 결과를 확인해보세요.',()=>showFeedback());
+                return;
+            }
+            setTimeout(()=>nextQ5(),2200);
+        }
+    },600);
+}
+
+function nextQ5(){
+    q5Idx++;
+    if(q5Idx>=q5Problems.length) finishQ5();
+    else setupQ5();
+}
+
+function finishQ5(){
+    el('q5-overlay').style.display='none';
+    markQuestPassed(5);
+    if(!hasWeapon){
+        // 마법 무기 없음 → Q6 불가
+        showOv('assets/cannotgo.png',
+            '슬라임 몬스터를 물리쳤지만...\n마법의 무기가 없어 미노타우루스 몬스터와\n대결할 수 없습니다.',
+            ()=>showFeedback()
+        );
+    } else {
+        showOvFB('assets/success3.png','⚔ 슬라임 몬스터를 처치했습니다!\n성 내부를 이동하던 중...\n거대하게 잠긴 문을 발견했다!',
+            ()=>startQ55()
+        );
+    }
+}
+
+function failQ5(){
+    el('q5-overlay').style.display='none';
+    showOv('assets/bg.png','슬라임 몬스터에게 쓰러졌습니다...\n여기까지의 결과를 확인해보세요.',()=>showFeedback());
+}
+
+
+/* ================================================================
+   QUEST 5.5: 잠긴 문 — Q45 유형 문제 1개
+================================================================ */
+let q55Problem=null, q55WrongCount=0;
+
+function genQ55Problem(){
+    // Q45 유형: a=1 또는 a≠1, 랜덤
+    const useA1=Math.random()<0.5;
+    if(useA1){
+        const p=randNonZero(-5,5), q=randNonZero(-8,8);
+        const b=-2*p, cv=p*p+q;
+        const halfB=b/2, halfBsq=halfB*halfB;
+        const bStr=b>0?`+${b}`:String(b);
+        const cStr=cv>0?`+${cv}`:cv<0?String(cv):'';
+        return {
+            a:1,p,q,b,c:cv,
+            lines:[
+                `${fmtGeneral(1,b,cv)}`,
+                `  = x² ${bStr}x + [①] - [①] ${cStr}`,
+                `  = (x + [②])² + [③]`,
+            ],
+            answerSeq:[halfBsq, halfBsq, halfB, q],
+            hint:`💡 (x의 계수 ${b})÷2 를 이용해 완전제곱식을 만드세요.`
+        };
+    } else {
+        const aPool=[2,-1,3,-2];
+        const a=aPool[Math.floor(Math.random()*aPool.length)];
+        const p=randNonZero(-4,4), q=randNonZero(-6,6);
+        const b=-2*a*p, cv=a*p*p+q;
+        const bOverA=b/a, halfBoverA=bOverA/2, halfSq=halfBoverA*halfBoverA;
+        const as=fmtA(a);
+        const baStr=bOverA>0?`+${bOverA}`:String(bOverA);
+        const cStr=cv>0?`+${cv}`:cv<0?String(cv):'';
+        return {
+            a,p,q,b,c:cv,
+            lines:[
+                `${fmtGeneral(a,b,cv)}`,
+                `  = ${as}(x² ${baStr}x) ${cStr}`,
+                `  = ${as}(x² ${baStr}x + [①] - [①]) ${cStr}`,
+                `  = ${as}(x + [②])² + [③]`,
+            ],
+            answerSeq:[halfSq, halfSq, halfBoverA, q],
+            hint:`💡 ${as}를 먼저 묶고, (x의 계수 ${bOverA})÷2 를 이용하세요.`
+        };
+    }
+}
+
+function startQ55(){
+    currentQuest=5.5;
+    q55Problem=genQ55Problem();
+    q55WrongCount=0;
+    el('q5-overlay').style.display='none';
+    el('unicorn-scene').style.display='none';
+    el('q55-overlay').style.display='block';
+    el('full-overlay').style.display='none';
+    el('overlay-msg').style.display='none';
+    showOv('assets/lockeddoor.png',
+        '🔒 QUEST 5.5: 잠긴 문\n\n성 깊은 곳, 거대한 잠긴 문 앞에 섰다.\n문에 새겨진 수식의 빈칸을 채워야\n문이 열립니다!\n기회는 단 2번. 신중하게 풀어야 합니다.',
+        ()=>setupQ55(), false, '▶ 시작하기'
+    );
+}
+
+function setupQ55(){
+    const prob=q55Problem;
+    el('q55-msg').innerText='';
+    el('q55-blanks').innerHTML=''; // 더 이상 사용 안 함
+    el('q55-problem').innerHTML='다음 빈칸을 채워 표준형으로 변환하시오.<br><br>'+buildInlineQ('q55',prob);
+}
+
+function submitQ55(){
+    const prob=q55Problem;
+    const inps55=el('q55-problem').querySelectorAll('input.q55-inp-inline');
+    const answers=[...inps55].map(inp=>parseFloat(inp.value));
+    if(answers.some(v=>isNaN(v))){el('q55-msg').style.color='#f39c12';el('q55-msg').innerText='모든 빈칸을 채워주세요!';return;}
+    if(answers.length!==prob.answerSeq.length){
+        el('q55-msg').style.color='#f39c12';
+        el('q55-msg').innerText='빈칸 수 불일치. 새로고침 후 다시 시도하세요.'; return;
+    }
+    const ok=prob.answerSeq.every((ans,i)=>Math.abs(answers[i]-ans)<0.01);
+    if(ok){
+        pHP=Math.min(100,pHP+25);addGold(10);updateUI();
+        el('q55-msg').style.color='#2ecc71';
+        el('q55-msg').style.color='#2ecc71';
+        el('q55-msg').innerText='🔓 딸깍! 문이 열렸습니다! 안으로 들어간다...';
+        setTimeout(()=>{el('q55-overlay').style.display='none';startQ6();},2000);
+    } else {
+        pHP=Math.max(0,pHP-25);updateUI();
+        q55WrongCount++;
+        if(pHP<=0){
+            el('q55-msg').style.color='#e74c3c';
+            el('q55-msg').innerText='HP가 0이 되었습니다...';
+            setTimeout(()=>{el('q55-overlay').style.display='none';showOv('assets/mk_fail3.png','체력이 부족하여 문을 열지 못했습니다...',()=>showFeedback());},1400);
+            return;
+        }
+        if(q55WrongCount===1){
+            el('q55-msg').style.color='#f39c12';
+            el('q55-msg').innerText=prob.hint+'\n한 번 더 기회가 있습니다!';
+        } else {
+            // 2회 오답: HP 상관없이 게임 종료
+            el('q55-msg').style.color='#e74c3c';
+            el('q55-msg').innerText='✘ 문을 열지 못했습니다. 앞으로 나아갈 수 없습니다...';
+            setTimeout(()=>{
+                el('q55-overlay').style.display='none';
+                showOv('assets/lockeddoor.png','문을 열지 못했습니다.\n앞으로 나아갈 수 없습니다...\n여기까지의 결과를 확인해보세요.',()=>showFeedback());
+            },1600);
+        }
+    }
+}
+
+/* ================================================================
+   QUEST 6: 성 내부 미로 — 이차함수 일반형 그래프 그리기
+================================================================ */
+const Q6_CX=500, Q6_CY=265, Q6_UNIT=50;
+
+function genQ6Problems(){
+    const probs=[];
+    // 좌표평면 표시 범위: x -8~8, y -4~4
+    // 꼭짓점(p,q), y절편(0,c) 모두 범위 내여야 클릭 가능
+    const aPool=[1,-1,2,-2];  // 계수 작게 제한 (c값 폭증 방지)
+    function rA(){ return aPool[Math.floor(Math.random()*aPool.length)]; }
+
+    function makeProb(a,p,q){
+        const c=a*p*p+q;
+        return {a,b:-2*a*p,c,p,q};
+    }
+
+    function validProb(prob){
+        // 꼭짓점과 y절편이 모두 화면 범위 내 정수
+        const {p,q,c,a}=prob;
+        return Number.isInteger(p)&&Number.isInteger(q)&&Number.isInteger(c)
+            && Math.abs(p)<=7 && Math.abs(q)<=4
+            && Math.abs(c)<=4
+            && !(p===0&&q===0);  // 원점 꼭짓점 제외
+    }
+
+    // 1~5번: p or q = 0 (하나만)
+    let cnt=0;
+    while(probs.length<5&&cnt<200){
+        cnt++;
+        const a=rA();
+        let p,q;
+        if(probs.length%2===0){p=randNonZero(-4,4);q=0;}
+        else{p=0;q=randNonZero(-4,4);}
+        const pr=makeProb(a,p,q);
+        if(validProb(pr)) probs.push(pr);
+    }
+
+    // 6~10번: p,q 모두 0 아님
+    cnt=0;
+    while(probs.length<10&&cnt<300){
+        cnt++;
+        const a=rA();
+        const p=randNonZero(-3,3);
+        const q=randNonZero(-3,3);
+        const pr=makeProb(a,p,q);
+        if(validProb(pr)) probs.push(pr);
+    }
+    return probs;
+}
+
+let q6Problems=[], q6Idx=0, q6WrongPerQ=0;
+let q6ClickedVertex=null, q6ClickedYInt=null, q6CurvDir=null;
+let q6Mode=null; // 'vtx' | 'yint' | null
+let q6Dots=[];
+
+function updateQ6HP(){
+    const f=el('q6-hp-fill'),n=el('q6-hp-num');
+    const lv=el('q6-lv-text');
+    if(f)f.style.width=pHP+'%';
+    if(n)n.innerText=pHP;
+    if(lv)lv.innerText=`LV.${currentLevel} 용사`;
+    const col=pHP>50?'#e74c3c':pHP>25?'#f39c12':'#c0392b';
+    if(f)f.style.background=`linear-gradient(to right,${col},#7b0000)`;
+    if(n)n.style.color=col;
+}
+
+function startQ6(){
+    currentQuest=6; currentLevel=6;
+    q6Problems=genQ6Problems();
+    q6Idx=0;
+    el('q6-overlay').style.display='block';
+    el('q55-overlay').style.display='none';
+    const q6badge=document.getElementById('q6-item-badge');
+    if(q6badge)q6badge.style.display=hasWeapon?'flex':'none';
+    el('full-overlay').style.display='none';
+    updateQ6HP(); updateUI();
+    drawQ6Grid();
+    showOv('assets/bg1.png',
+        '🗺 QUEST 6: 성 내부 미로 탈출!\n\n이차함수 y=ax²+bx+c의 그래프를 그려\n미로에서 탈출하세요!\n① 꼭짓점 클릭 → ② y축 교점 클릭\n③ 볼록 모양 선택 → ④ 그래프 완성!\n\n총 10문제!',
+        ()=>setupQ6(), false, '▶ 시작하기'
+    );
+}
+
+function drawQ6Grid(){
+    const cv=el('q6-canvas-grid'), ctx2=cv.getContext('2d');
+    ctx2.clearRect(0,0,1000,530);
+
+    // 모눈종이: 연한 보조선
+    ctx2.strokeStyle='rgba(200,200,220,0.18)'; ctx2.lineWidth=0.8;
+    for(let i=-9;i<=9;i++){
+        ctx2.beginPath();ctx2.moveTo(Q6_CX+i*Q6_UNIT,0);ctx2.lineTo(Q6_CX+i*Q6_UNIT,530);ctx2.stroke();
+    }
+    for(let j=-5;j<=5;j++){
+        ctx2.beginPath();ctx2.moveTo(0,Q6_CY-j*Q6_UNIT);ctx2.lineTo(1000,Q6_CY-j*Q6_UNIT);ctx2.stroke();
+    }
+    // 좌표축
+    ctx2.strokeStyle='rgba(255,255,255,0.85)';ctx2.lineWidth=2;
+    ctx2.beginPath();ctx2.moveTo(0,Q6_CY);ctx2.lineTo(996,Q6_CY);ctx2.stroke();
+    ctx2.beginPath();ctx2.moveTo(Q6_CX,4);ctx2.lineTo(Q6_CX,526);ctx2.stroke();
+    // 화살표
+    ctx2.fillStyle='rgba(255,255,255,0.85)';
+    ctx2.beginPath();ctx2.moveTo(998,Q6_CY);ctx2.lineTo(986,Q6_CY-6);ctx2.lineTo(986,Q6_CY+6);ctx2.fill();
+    ctx2.beginPath();ctx2.moveTo(Q6_CX,2);ctx2.lineTo(Q6_CX-6,14);ctx2.lineTo(Q6_CX+6,14);ctx2.fill();
+    // 축 레이블
+    ctx2.fillStyle='#f1c40f';ctx2.font='bold 14px Arial';
+    ctx2.textAlign='left'; ctx2.fillText('x',982,Q6_CY-6);
+    ctx2.textAlign='center';ctx2.fillText('y',Q6_CX,14);
+    // 눈금 + 숫자 (모든 정수)
+    ctx2.fillStyle='rgba(255,255,255,0.88)';ctx2.font='bold 13px Arial';
+    ctx2.textAlign='center';
+    for(let i=-9;i<=9;i++){
+        if(i===0)continue;
+        const x=Q6_CX+i*Q6_UNIT;
+        // 눈금 선
+        ctx2.strokeStyle='rgba(255,255,255,0.5)';ctx2.lineWidth=1;
+        ctx2.beginPath();ctx2.moveTo(x,Q6_CY-4);ctx2.lineTo(x,Q6_CY+4);ctx2.stroke();
+        // 숫자
+        ctx2.fillText(String(i),x,Q6_CY+17);
+    }
+    ctx2.textAlign='right';
+    for(let j=-4;j<=4;j++){
+        if(j===0)continue;
+        const y=Q6_CY-j*Q6_UNIT;
+        ctx2.strokeStyle='rgba(255,255,255,0.5)';ctx2.lineWidth=1;
+        ctx2.beginPath();ctx2.moveTo(Q6_CX-4,y);ctx2.lineTo(Q6_CX+4,y);ctx2.stroke();
+        ctx2.fillText(String(j),Q6_CX-7,y+5);
+    }
+    ctx2.fillStyle='rgba(200,200,200,0.7)';ctx2.textAlign='right';
+    ctx2.fillText('O',Q6_CX-5,Q6_CY+16);
+}
+
+function setupQ6(){
+    const prob=q6Problems[q6Idx];
+    q6ClickedVertex=null; q6ClickedYInt=null; q6CurvDir=null;
+    q6Dots=[]; const _layer=document.getElementById('q6-dots-layer');if(_layer)_layer.innerHTML='';
+    // 버튼 상태 초기화
+    q6WrongPerQ=0; q6Mode=null;
+    el('q6-btn-up').classList.remove('selected');
+    el('q6-btn-down').classList.remove('selected');
+    el('q6-btn-vtx').className='q6-mode-btn';
+    el('q6-btn-yint').className='q6-mode-btn';
+    // 그래프 캔버스 초기화
+    el('q6-canvas-graph').getContext('2d').clearRect(0,0,1000,530);
+    el('q6-msg').innerText='';
+    el('q6-prog').innerText=`문제 ${q6Idx+1} / ${q6Problems.length}`;
+    el('q6-status').innerText='① 꼭짓점 클릭 → ② y축 교점 클릭 → ③ 볼록 모양 선택 → ④ 제출';
+    el('q6-question').innerText=`다음 이차함수 그래프의 꼭짓점과 y축 교점을 클릭하고 모양을 선택하시오.\n${fmtGeneral(prob.a,prob.b,prob.c)}`;
+    setupQ6Click(prob);
+    updateQ6HP();
+}
+
+function setQ6Mode(mode){
+    // mode: 'vtx' | 'yint' | null
+    q6Mode = mode;
+    const bv=el('q6-btn-vtx'), by=el('q6-btn-yint');
+    bv.className='q6-mode-btn'+(q6ClickedVertex?' done':'')+(mode==='vtx'?' active':'');
+    by.className='q6-mode-btn'+(q6ClickedYInt?' done':'')+(mode==='yint'?' active':'');
+    if(mode==='vtx')
+        el('q6-status').innerText='[📍 꼭짓점 모드] 좌표평면에서 꼭짓점을 클릭하세요. (재클릭으로 변경 가능)';
+    else if(mode==='yint')
+        el('q6-status').innerText='[📌 y축과의 교점 모드] y축(x=0) 위의 교점을 클릭하세요. (재클릭으로 변경 가능)';
+    else
+        el('q6-status').innerText='버튼을 눌러 입력 모드를 선택하세요.';
+}
+
+function setupQ6Click(prob){
+    const layer=document.getElementById('q6-dots-layer');
+    layer.innerHTML='';
+    layer.style.pointerEvents='none';
+    const Q6_YMAX=4, Q6_XMAX=8;
+
+    for(let gx=-Q6_XMAX;gx<=Q6_XMAX;gx++){
+        for(let gy=-Q6_YMAX;gy<=Q6_YMAX;gy++){
+            const sx=Q6_CX+gx*Q6_UNIT;
+            const sy=Q6_CY-gy*Q6_UNIT;
+            if(sx<10||sx>990||sy<10||sy>520) continue;
+
+            const dot=document.createElement('div');
+            dot.style.cssText=
+                `position:absolute;left:${sx}px;top:${sy}px;`+
+                `width:22px;height:22px;border-radius:50%;`+
+                `background:rgba(255,255,200,0.35);`+
+                `border:2px solid rgba(255,255,200,0.7);`+
+                `transform:translate(-50%,-50%);cursor:pointer;`+
+                `pointer-events:all;z-index:50;box-sizing:border-box;`+
+                `transition:background 0.1s,transform 0.1s;`;
+            dot.title=`(${gx},${gy})`;
+            dot._gx=gx; dot._gy=gy;
+
+            dot.onmouseenter=()=>{ dot.style.transform='translate(-50%,-50%) scale(1.3)'; };
+            dot.onmouseleave=()=>{
+                const isVtx=q6ClickedVertex&&q6ClickedVertex.x===gx&&q6ClickedVertex.y===gy;
+                const isYint=q6ClickedYInt&&q6ClickedYInt.x===gx&&q6ClickedYInt.y===gy;
+                dot.style.transform='translate(-50%,-50%)'+(isVtx||isYint?' scale(1.2)':'');
+            };
+
+            ((_gx,_gy,_dot)=>{
+                _dot.onclick=()=>{
+                    if(!q6Mode){
+                        el('q6-status').innerText='⚠ 먼저 [📍 꼭짓점 선택] 또는 [📌 y축과의 교점 선택] 버튼을 누르세요!';
+                        return;
+                    }
+                    if(q6Mode==='vtx'){
+                        // 꼭짓점 선택/재선택
+                        q6ClickedVertex={x:_gx,y:_gy};
+                        updateQ6DotColors();
+                        el('q6-btn-vtx').className='q6-mode-btn done';
+                        el('q6-status').innerText=`꼭짓점 (${_gx},${_gy}) 선택됨 ✔  →  y축과의 교점 선택 또는 제출`;
+                    } else if(q6Mode==='yint'){
+                        // y축과의 교점 선택/재선택 (x=0 아닌 점도 허용, 정답 체크에서 판단)
+                        q6ClickedYInt={x:_gx,y:_gy};
+                        updateQ6DotColors();
+                        el('q6-btn-yint').className='q6-mode-btn done';
+                        el('q6-status').innerText=`y절편 (${_gx},${_gy}) 선택됨 ✔  →  모양 선택 후 제출`;
+                    }
+                };
+            })(gx,gy,dot);
+
+            layer.appendChild(dot);
+            q6Dots.push(dot);
+        }
+    }
+}
+
+function updateQ6DotColors(){
+    // 모든 점 색상 초기화 후 선택된 점만 강조
+    const layer=document.getElementById('q6-dots-layer');
+    if(!layer) return;
+    layer.querySelectorAll('div').forEach(d=>{
+        const isVtx=q6ClickedVertex&&d._gx===q6ClickedVertex.x&&d._gy===q6ClickedVertex.y;
+        const isYint=q6ClickedYInt&&d._gx===q6ClickedYInt.x&&d._gy===q6ClickedYInt.y;
+        // 꼭짓점=y절편인 경우: 반반 색상
+        if(isVtx&&isYint){
+            d.style.background='linear-gradient(135deg,#f1c40f 50%,#4fc3f7 50%)';
+            d.style.border='2px solid #fff';
+        } else if(isVtx){
+            d.style.background='#f1c40f';
+            d.style.border='2px solid #e67e22';
+        } else if(isYint){
+            d.style.background='#4fc3f7';
+            d.style.border='2px solid #2980b9';
+        } else {
+            d.style.background='rgba(255,255,200,0.35)';
+            d.style.border='2px solid rgba(255,255,200,0.7)';
+        }
+        // 라벨 업데이트
+        Array.from(d.children).forEach(ch=>ch.remove());
+        if(isVtx||isYint){
+            const lbl=document.createElement('div');
+            const txt=isVtx&&isYint?`꼭짓점=y절편\n(${d._gx},${d._gy})`:
+                       isVtx?`꼭짓점\n(${d._gx},${d._gy})`:`y절편\n(${d._gx},${d._gy})`;
+            lbl.style.cssText='position:absolute;top:-34px;left:50%;transform:translateX(-50%);'+
+                'font-size:10px;color:#fff;font-weight:bold;white-space:nowrap;pointer-events:none;'+
+                'text-shadow:1px 1px 3px #000;text-align:center;line-height:1.3;';
+            lbl.innerText=txt;
+            d.appendChild(lbl);
+        }
+    });
+}
+
+function addQ6Dot(sx,sy,color,label){/* deprecated */}
+
+function selectQ6Curv(dir){
+    q6CurvDir=dir;
+    el('q6-btn-up').className='q6-curv-btn'+(dir==='up'?' selected':'');
+    el('q6-btn-down').className='q6-curv-btn'+(dir==='down'?' selected':'');
+}
+function submitQ6(){
+    if(!q6ClickedVertex){el('q6-msg').style.color='#f39c12';el('q6-msg').innerText='[📍 꼭짓점 선택] 버튼을 누르고 꼭짓점을 클릭하세요!';return;}
+    if(!q6ClickedYInt){el('q6-msg').style.color='#f39c12';el('q6-msg').innerText='[📌 y축과의 교점 선택] 버튼을 누르고 y절편을 클릭하세요!';return;}
+    if(!q6CurvDir){el('q6-msg').style.color='#f39c12';el('q6-msg').innerText='∩ 위로 볼록 또는 ∪ 아래로 볼록 모양을 선택하세요!';return;}
+
+    const prob=q6Problems[q6Idx];
+    const vtxOk=(q6ClickedVertex.x===prob.p && q6ClickedVertex.y===prob.q);
+    const yintOk=(q6ClickedYInt.x===0 && q6ClickedYInt.y===prob.c);
+    const curvOk=(q6CurvDir==='up'?prob.a<0:prob.a>0);
+    const ok=vtxOk&&yintOk&&curvOk;
+
+    if(ok){
+        // 정답 시에만 그래프 표시
+        const ctx2=el('q6-canvas-graph').getContext('2d');
+        ctx2.clearRect(0,0,1000,530);
+        ctx2.strokeStyle='#2ecc71'; ctx2.lineWidth=3;
+        ctx2.shadowColor='#2ecc71'; ctx2.shadowBlur=8;
+        ctx2.beginPath(); let first=true;
+        for(let x=-10;x<=10;x+=0.05){
+            const y=prob.a*Math.pow(x-prob.p,2)+prob.q;
+            const sx=Q6_CX+x*Q6_UNIT, sy=Q6_CY-y*Q6_UNIT;
+            if(sy<-5||sy>535||sx<-5||sx>1005){first=true;continue;}
+            first?ctx2.moveTo(sx,sy):ctx2.lineTo(sx,sy); first=false;
+        }
+        ctx2.stroke(); ctx2.shadowBlur=0;
+    }
+
+    if(ok){
+        gd.q6.c++; pHP=Math.min(100,pHP+25); addGold(10);
+        updateQ6HP(); updateUI();
+        el('q6-msg').style.color='#2ecc71';
+        el('q6-msg').innerText='✔ 길을 찾았다! 이쪽이다!';
+        // 점 클릭 비활성화
+        const layer=document.getElementById('q6-dots-layer');
+        if(layer) layer.querySelectorAll('div').forEach(d=>{d.style.pointerEvents='none';});
+        setTimeout(()=>nextQ6(),2000);
+    } else {
+        gd.q6.w++; q6WrongPerQ++;
+        pHP=Math.max(0,pHP-25);
+        updateQ6HP(); updateUI();
+        if(pHP<=0){
+            q6Dots=[]; const _lyr=document.getElementById('q6-dots-layer');if(_lyr)_lyr.innerHTML='';
+            el('q6-overlay').style.display='none';
+            showOv('assets/bg1.png','미로 속에서 체력이 소진되었습니다...\n여기까지의 결과를 확인해보세요.',()=>showFeedback());
+            return;
+        }
+        if(q6WrongPerQ===1){
+            el('q6-msg').style.color='#f39c12';
+            el('q6-msg').innerText='✘ 막힌 길이다! HP -25. 다시 선택하세요!';
+            setTimeout(()=>{
+                q6ClickedVertex=null; q6ClickedYInt=null; q6CurvDir=null; q6Mode=null;
+                el('q6-btn-up').classList.remove('selected');
+                el('q6-btn-down').classList.remove('selected');
+                el('q6-btn-vtx').className='q6-mode-btn';
+                el('q6-btn-yint').className='q6-mode-btn';
+                el('q6-canvas-graph').getContext('2d').clearRect(0,0,1000,530);
+                const layer=document.getElementById('q6-dots-layer');
+                if(layer) layer.querySelectorAll('div').forEach(d=>{
+                    d.style.pointerEvents='all';
+                    d.style.background='rgba(255,255,200,0.35)';
+                    d.style.border='2px solid rgba(255,255,200,0.7)';
+                    d.style.transform='translate(-50%,-50%)';
+                    Array.from(d.children).forEach(ch=>ch.remove());
+                });
+                el('q6-status').innerText='[📍 꼭짓점 선택] 버튼을 누르고 좌표평면에서 점을 클릭하세요';
+                el('q6-msg').innerText='';
+            },2200);
+        } else {
+            el('q6-msg').style.color='#e74c3c';
+            el('q6-msg').innerText='✘ 2회 오답. 다음 문제로 넘어갑니다.';
+            setTimeout(()=>nextQ6(),2000);
+        }
+    }
+}
+
+
+function nextQ6(){
+    q6Idx++;
+    if(q6Idx>=q6Problems.length) finishQ6();
+    else setupQ6();
+}
+
+function finishQ6(){
+    q6Dots=[]; const _layer=document.getElementById('q6-dots-layer');if(_layer)_layer.innerHTML='';
+    el('q6-overlay').style.display='none';
+    markQuestPassed(6);
+    currentLevel=7; updateUI();
+    showOvFB('assets/bg1.png',
+        '🗺 미로를 탈출했습니다! ⬆ LV UP!\n\n드디어... 미노타우루스 몬스터와 마주쳤다!\n최후의 결전이 시작된다!',
+        ()=>startQ7()
+    );
+}
+
+function failQ6(){
+    q6Dots=[]; const _layer=document.getElementById('q6-dots-layer');if(_layer)_layer.innerHTML='';
+    el('q6-overlay').style.display='none';
+    showOv('assets/bg1.png','미로에서 길을 잃었습니다...\n여기까지의 결과를 확인해보세요.',()=>showFeedback());
+}
+
+/* ================================================================
+   QUEST 7: 미노타우루스 최종 결전
+================================================================ */
+const Q7_APOOL=[1,-1,2,-2,3,-3];
+
+// 1~4번: y=ax²+bx+c 제시 → 축/꼭짓점/y절편 입력
+// 5번: 이미지 (1) 유형 — 두 조건(한 점 통과 + 꼭짓점 좌표)
+// 6번: 이미지 (2) 유형 — y=ax²+bx+1 두 점 통과 → a,b 구하기
+
+function genQ7Problems(){
+    const probs=[];
+    function rA(){ return Q7_APOOL[Math.floor(Math.random()*Q7_APOOL.length)]; }
+
+    // 1~4번: y=ax²+bx+c, 랜덤 p,q 으로 생성
+    for(let i=0;i<4;i++){
+        const a=rA();
+        const p=randNonZero(-4,4);
+        const q=randNonZero(-5,5);
+        const b=-2*a*p, cv=a*p*p+q;
+        probs.push({type:'basic', a, b, c:cv, p, q});
+    }
+
+    // 5번: (1) 유형 — y=ax²+bx+c, 한 점(-2,0) 통과 + 꼭짓점(-1,3) → a,b,c 구하기
+    // 꼭짓점(-1,3) → p=-1, q=3 → y=a(x+1)²+3
+    // 점(-2,0) 대입: 0=a(-2+1)²+3 = a+3 → a=-3
+    // b=-2ap=6, c=ap²+q=-3+3=0 → y=-3x²+6x
+    // 이걸 랜덤화: 꼭짓점(px,py), 통과점(gx, gy) 랜덤 생성
+    {
+        let a,p,q,gx,gy,b,cv;
+        let tries=0;
+        do {
+            p=randNonZero(-3,3);
+            q=randNonZero(1,5);
+            gx=p+randNonZero(-3,3); // 꼭짓점과 다른 x
+            // a를 역산: a=(gy-q)/(gx-p)²
+            const denom=(gx-p)*(gx-p);
+            // gy를 정수로 맞추기 위해 a를 정수로 먼저 정하고 gy 계산
+            a=[-1,-2,-3,1,2,3][Math.floor(Math.random()*6)];
+            gy=a*(gx-p)*(gx-p)+q;
+            b=-2*a*p; cv=a*p*p+q;
+            tries++;
+        } while((Math.abs(gy)>9||gx===p||gy===q)&&tries<50);
+        probs.push({
+            type:'q5',
+            a, b, c:cv, p, q,
+            gx, gy,  // 통과하는 점
+            // 답: a, b, c
+        });
+    }
+
+    // 6번: (2) 유형 — y=ax²+bx+1 이 두 점 통과 → a,b 구하기
+    // 두 점 (x1,y1),(x2,y2)를 설정하고 역산
+    {
+        let a,b,x1,y1,x2,y2;
+        let tries=0;
+        do {
+            a=[-1,-2,2,1][Math.floor(Math.random()*4)];
+            b=randNonZero(-4,4);
+            x1=randNonZero(-3,3);
+            x2=randNonZero(-3,3);
+            y1=a*x1*x1+b*x1+1;
+            y2=a*x2*x2+b*x2+1;
+            tries++;
+        } while((x1===x2||Math.abs(y1)>9||Math.abs(y2)>9)&&tries<50);
+        probs.push({type:'q6', a, b, x1, y1, x2, y2});
+    }
+
+    return probs;
+}
+
+let q7Problems=[], q7Idx=0, q7WrongPerQ=0;
+let q7LastTwo=[false,false]; // 5,6번 정답 여부
+
+function updateQ7HP(){
+    const f=el('q7-hp-fill'),n=el('q7-hp-num'),lv=el('q7-lv-text');
+    if(f)f.style.width=pHP+'%';
+    if(n)n.innerText=pHP;
+    if(lv)lv.innerText=`LV.${currentLevel} 용사`;
+    const col=pHP>50?'#e74c3c':pHP>25?'#f39c12':'#c0392b';
+    if(f)f.style.background=`linear-gradient(to right,${col},#7b0000)`;
+    if(n)n.style.color=col;
+}
+
+function q7SetChar(kImg,mImg){
+    if(kImg) el('q7-knight').style.backgroundImage=`url('${kImg}')`;
+    if(mImg) el('q7-monster').style.backgroundImage=`url('${mImg}')`;
+}
+
+function startQ7(){
+    // 마법의 활과 화살 없으면 진입 불가
+    if(!hasWeapon){
+        showOv('assets/cannotgo.png',
+            '마법의 활과 화살이 없어\n미노타우루스 몬스터를 상대할 수 없습니다!\n여기까지의 결과를 확인해보세요.',
+            ()=>showFeedback()
+        );
+        return;
+    }
+    currentQuest=7; currentLevel=7;
+    q7Problems=genQ7Problems();
+    q7Idx=0; q7WrongPerQ=0; q7LastTwo=[false,false];
+    el('q7-overlay').style.display='block';
+    el('q6-overlay').style.display='none';
+    const q7badge=document.getElementById('q7-item-badge');
+    if(q7badge)q7badge.style.display=hasWeapon?'flex':'none';
+    el('full-overlay').style.display='none';
+    el('overlay-msg').style.display='none';
+    updateQ7HP(); updateUI();
+    showOv('assets/bg1.png',
+        '⚔ QUEST 7: 미노타우루스 최종 결전\n\n이차함수의 미지수를 구하는 문제로 최강의 몬스터를 물리쳐라!\n⚠ 축의 방정식은 반드시 x=숫자 형식으로 입력! (예: x=3)\n⚠ HP가 0이 되거나 5번·6번 중 하나라도 틀리면 실패!\n각 문제당 기회는 2번!',
+        ()=>setupQ7(), false, '▶ 시작하기'
+    );
+}
+
+function setupQ7(){
+    const prob=q7Problems[q7Idx];
+    q7WrongPerQ=0;
+    el('q7-prog').innerText=`문제 ${q7Idx+1} / ${q7Problems.length}`;
+    el('q7-msg').innerText='';
+    el('q7-input-area').innerHTML='';
+
+    // 대치 이미지: 1,2,6번=k_bow / 3,4,5번=k_solo
+    const qNum=q7Idx+1;
+    const standImg=(qNum===1||qNum===2||qNum===6)?'assets/k_bow.png':'assets/k_solo.jpg';
+    q7SetChar(standImg,'assets/m_shield.png');
+
+    if(prob.type==='basic'){
+        const formula=fmtGeneral(prob.a,prob.b,prob.c);
+        el('q7-question').innerText=
+            `다음 이차함수의 축의 방정식, 꼭짓점 좌표, y축과의 교점 좌표를 구하시오.\n${formula}`;
+        el('q7-input-area').innerHTML=`
+            <div class="q7-inp-group"><span>축의 방정식:</span>
+                <input class="q7-inp" id="q7-axis" type="text" placeholder="x=?" style="width:80px;"></div>
+            <div class="q7-inp-group"><span>꼭짓점: (</span>
+                <input class="q7-inp" id="q7-vx" type="text" inputmode="decimal" pattern="-?[0-9.]*" placeholder="x">
+                <span>,</span>
+                <input class="q7-inp" id="q7-vy" type="text" inputmode="decimal" pattern="-?[0-9.]*" placeholder="y">
+                <span>)</span></div>
+            <div class="q7-inp-group"><span>y축과의 교점: (</span>
+                <input class="q7-inp" id="q7-ix" type="text" inputmode="decimal" pattern="-?[0-9.]*" placeholder="x">
+                <span>,</span>
+                <input class="q7-inp" id="q7-iy" type="text" inputmode="decimal" pattern="-?[0-9.]*" placeholder="y">
+                <span>)</span></div>
+            <button id="q7-attack-btn" onclick="attackQ7()">✨ 마법의 힘으로 공격!</button>`;
+    } else if(prob.type==='q5'){
+        const vtxStr=`(${prob.p}, ${prob.q})`;
+        const ptStr=`(${prob.gx}, ${prob.gy})`;
+        el('q7-question').innerText=
+            `이차함수 y = ax² + bx + c의 그래프가 점 ${ptStr}을 지나고\n꼭짓점의 좌표가 ${vtxStr}일 때, 상수 a, b, c의 값을 각각 구하시오.`;
+        el('q7-input-area').innerHTML=`
+            <div class="q7-inp-group"><span>a =</span>
+                <input class="q7-inp" id="q7-a" type="text" inputmode="decimal" pattern="-?[0-9.]*" placeholder="?"></div>
+            <div class="q7-inp-group"><span>b =</span>
+                <input class="q7-inp" id="q7-b" type="text" inputmode="decimal" pattern="-?[0-9.]*" placeholder="?"></div>
+            <div class="q7-inp-group"><span>c =</span>
+                <input class="q7-inp" id="q7-c" type="text" inputmode="decimal" pattern="-?[0-9.]*" placeholder="?"></div>
+            <button id="q7-attack-btn" onclick="attackQ7()">✨ 마법의 힘으로 공격!</button>`;
+    } else {
+        const pt1=`(${prob.x1}, ${prob.y1})`, pt2=`(${prob.x2}, ${prob.y2})`;
+        el('q7-question').innerText=
+            `이차함수 y = ax² + bx + 1의 그래프가 두 점\n${pt1}, ${pt2}를 지날 때, 상수 a, b의 값을 각각 구하시오.`;
+        el('q7-input-area').innerHTML=`
+            <div class="q7-inp-group"><span>a =</span>
+                <input class="q7-inp" id="q7-a" type="text" inputmode="decimal" pattern="-?[0-9.]*" placeholder="?"></div>
+            <div class="q7-inp-group"><span>b =</span>
+                <input class="q7-inp" id="q7-b" type="text" inputmode="decimal" pattern="-?[0-9.]*" placeholder="?"></div>
+            <button id="q7-attack-btn" onclick="attackQ7()">✨ 마법의 힘으로 공격!</button>`;
+    }
+}
+
+function getQ7Answer(){
+    const prob=q7Problems[q7Idx];
+    if(prob.type==='basic'){
+        const axisRaw=el('q7-axis').value.trim().replace(/\s/g,'');
+        // "x=숫자" 또는 "x=-숫자" 파싱
+        const axisMatch=axisRaw.match(/^x=(-?\d+\.?\d*)$/i);
+        if(!axisMatch){ el('q7-msg').style.color='#f39c12'; el('q7-msg').innerText='축의 방정식은 x=숫자 형식으로 입력하세요! (예: x=3)'; return null; }
+        const axis=parseFloat(axisMatch[1]);
+        const vx=parseFloat(el('q7-vx').value);
+        const vy=parseFloat(el('q7-vy').value);
+        const ix=parseFloat(el('q7-ix').value);
+        const iy=parseFloat(el('q7-iy').value);
+        if([vx,vy,ix,iy].some(isNaN)) return null;
+        const ok=(Math.abs(axis-prob.p)<0.01
+               && Math.abs(vx-prob.p)<0.01 && Math.abs(vy-prob.q)<0.01
+               && Math.abs(ix-0)<0.01 && Math.abs(iy-prob.c)<0.01);
+        return {ok,
+            hint:`[힌트] y=a(x-p)²+q에서 p=-b/(2a)\n축의 방정식: x=${prob.p}, 꼭짓점: (${prob.p},${prob.q})\ny축과의 교점: (0,${prob.c})`};
+    } else if(prob.type==='q5'){
+        const ua=parseFloat(el('q7-a').value);
+        const ub=parseFloat(el('q7-b').value);
+        const uc=parseFloat(el('q7-c').value);
+        if([ua,ub,uc].some(isNaN)) return null;
+        const ok=(Math.abs(ua-prob.a)<0.01 && Math.abs(ub-prob.b)<0.01 && Math.abs(uc-prob.c)<0.01);
+        return {ok, hint:`[힌트] 꼭짓점이 (p,q)이면 y=a(x-p)²+q 꼴.\n주어진 점을 대입해 a를 구하세요.\na=${prob.a}, b=${prob.b}, c=${prob.c}`};
+    } else {
+        const ua=parseFloat(el('q7-a').value);
+        const ub=parseFloat(el('q7-b').value);
+        if([ua,ub].some(isNaN)) return null;
+        const ok=(Math.abs(ua-prob.a)<0.01 && Math.abs(ub-prob.b)<0.01);
+        return {ok, hint:`[힌트] 두 점을 y=ax²+bx+1에 각각 대입해\na,b에 대한 연립방정식을 만들어 푸세요.\na=${prob.a}, b=${prob.b}`};
+    }
+}
+
+function attackQ7(){
+    const qNum=q7Idx+1;
+    const res=getQ7Answer();
+    if(!res){ el('q7-msg').style.color='#f39c12'; el('q7-msg').innerText='모든 칸에 형식에 맞게 입력하세요!'; return; }
+    el('q7-attack-btn').disabled=true;
+
+    // 5,6번 결과 기록
+    if(qNum===5) q7LastTwo[0]=res.ok;
+    if(qNum===6) q7LastTwo[1]=res.ok;
+
+    // 정답/오답에 따라 이미지 전환
+    if(res.ok){
+        gd.q7.c++; pHP=Math.min(100,pHP+25); addGold(10); updateQ7HP(); updateUI();
+        // 1,2,6번=k_bow2 / 3,4,5번=k_attack1
+        const atkImg=(qNum===1||qNum===2||qNum===6)?'assets/k_bow2.jpg':'assets/k_attack1.jpg';
+        el('q7-knight').style.backgroundImage=`url('${atkImg}')`;
+        el('q7-monster').style.backgroundImage="url('assets/mk_hit2.png')";
+        el('q7-msg').style.color='#2ecc71';
+        el('q7-msg').innerText='✔ 명중! 몬스터에게 타격을 입혔다!';
+        const fightImg=(qNum===1||qNum===2||qNum===6)?'assets/mk_fight3.png':'assets/mk_fight1.png';
+        setTimeout(()=>showOv(fightImg,'',()=>nextQ7()),1200);
+    } else {
+        gd.q7.w++; pHP=Math.max(0,pHP-25); updateQ7HP(); updateUI();
+        el('q7-knight').style.backgroundImage="url('assets/k_down1.jpg')";
+        el('q7-monster').style.backgroundImage="url('assets/mk_attack.png')";
+        if(pHP<=0){
+            el('q7-msg').style.color='#e74c3c';
+            el('q7-msg').innerText='HP 소진! 몬스터에게 패배하였습니다...';
+            setTimeout(()=>failQ7(),1800); return;
+        }
+        q7WrongPerQ++;
+        if(q7WrongPerQ===1){
+            el('q7-msg').style.color='#f39c12';
+            el('q7-msg').innerText='✘ 빗나갔다! HP -25\n'+res.hint.split('\n')[0];
+            el('q7-attack-btn').disabled=false;
+        } else {
+            el('q7-msg').style.color='#e74c3c';
+            el('q7-msg').innerText='✘ 2회 오답. 다음 문제로 넘어갑니다.';
+            setTimeout(()=>nextQ7(),2000);
+        }
+    }
+}
+
+function nextQ7(){
+    q7Idx++;
+    if(q7Idx>=q7Problems.length) finishQ7();
+    else setupQ7();
+}
+
+function finishQ7(){
+    markQuestPassed(7);
+    el('q7-overlay').style.display='none';
+    // 5,6번 모두 맞아야 통과
+    if(q7LastTwo[0]&&q7LastTwo[1]){
+        if(gd.q7.w===0)addGold(100);
+        showOv('assets/mk_victory1.png','미노타우루스를 쓰러뜨렸다!\n어둠의 힘이 사라졌다!'+(gd.q7.w===0?' 🌟퍼펙트! +100G':''),
+            ()=>showOv('assets/success4.png',
+                '⚔️ 미노타우루스 몬스터를 물리쳤다!\n용사여, 그대는 진정한 이차함수의 마스터!\n모든 퀘스트를 완료하였습니다! 🏆',
+                ()=>showOv('assets/ending1.png',
+                    '용사의 활약으로 마을에 평화가 찾아왔습니다.\n사람들은 서로를 아끼며 화목하게 살아가고,\n왕국 곳곳에 웃음꽃이 피어났습니다. 🌸\n\n수고했어요! 이차함수 완전 정복! 🎉',
+                    ()=>showFeedback(), false, '🎉 피드백 보기'
+                )
+            )
+        );
+    } else {
+        showOv('assets/mk_fail3.png',
+            '5번·6번 문제를 모두 맞추지 못했습니다...\n미노타우루스를 쓰러뜨리지 못했습니다.',
+            ()=>showFeedback()
+        );
+    }
+}
+
+function failQ7(){
+    el('q7-overlay').style.display='none';
+    showOv('assets/mk_fail3.png','몬스터에게 패배하였습니다...\n여기까지의 결과를 확인해보세요.',()=>showFeedback());
+}
+
+
+
+/* ================================================================
+   Firebase 팀 협동 시스템
+================================================================ */
+
+// ── Firebase 설정 (학생/선생님이 채워넣을 부분) ──────────────────────────────
+const FB_CONFIG = {
+    apiKey:            "AIzaSyA_H5vl2qe",
+    authDomain:        "quadratic-rpg-64c97.firebaseapp.com",
+    databaseURL:       "https://quadratic-rpg-64c97-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId:         "quadratic-rpg-64c97",
+    storageBucket:     "quadratic-rpg-64c97.firebasestorage.app",
+    messagingSenderId: "608854617731",
+    appId:             "1:608854617731:web:01be903c5504b060c3b5b6"
+};
+
+// 팀 상태
+let fbApp=null, fbDb=null;
+let myName='', teamCode='', teamSize=3;
+let teamRef=null, meRef=null;
+let hintReqKey=null; // 내가 받은 힌트 요청 키
+const QUEST_BONUS_GOLD=150;  // 팀 전체 퀘스트 통과 보너스
+const HINT_COST=5;           // 힌트 패널티 (요청자)
+
+function toggleFBConfig(){
+    const area=document.getElementById('fb-config-area');
+    area.style.display=area.style.display==='none'?'flex':'none';
+}
+
+function initFirebase(){
+    // 화면 입력값 우선 사용, 없으면 FB_CONFIG 사용
+    const dbUrl=(document.getElementById('inp-fb-db')||{value:''}).value.trim();
+    const apiKey=(document.getElementById('inp-fb-api')||{value:''}).value.trim();
+    const projId=(document.getElementById('inp-fb-proj')||{value:''}).value.trim();
+    const appId=(document.getElementById('inp-fb-app')||{value:''}).value.trim();
+
+    const config=dbUrl&&apiKey&&projId&&appId ? {
+        apiKey, authDomain:`${projId}.firebaseapp.com`,
+        databaseURL:dbUrl, projectId:projId,
+        storageBucket:`${projId}.appspot.com`, appId
+    } : FB_CONFIG;
+
+    // 플레이스홀더 값이면 실패
+    if(!config.apiKey||config.apiKey.includes('여기에')){
+        console.warn('Firebase 설정값이 없습니다.');
+        return false;
+    }
+    try{
+        // 이미 초기화된 앱이 있으면 재사용
+        if(firebase.apps.length>0){
+            fbDb=firebase.apps[0].database();
+        } else {
+            fbApp=firebase.initializeApp(config);
+            fbDb=firebase.database();
+        }
+        return true;
+    } catch(e){
+        console.warn('Firebase 초기화 실패:', e.message);
+        return false;
+    }
+}
+
+// ── 팀 입장 ────────────────────────────────────────────────────────────────
+function joinTeam(){
+    myName=el('inp-pname').value.trim();
+    teamCode=el('inp-tcode').value.trim();
+    teamSize=parseInt(el('inp-tsize').value)||3;
+    const err=el('team-join-err');
+    if(!myName){ err.innerText='이름을 입력해주세요.'; return; }
+    if(!teamCode){ err.innerText='팀 코드를 입력해주세요.'; return; }
+    err.innerText='';
+
+    if(!initFirebase()){
+        // Firebase 미설정 → 솔로 모드로 진행
+        err.style.color='#e74c3c';
+        err.innerText='⚠ Firebase 설정값을 입력해주세요. (Database URL, API Key, Project ID, App ID)';
+        return;
+        return;
+    }
+
+    // Firebase 연결
+    teamRef=fbDb.ref(`teams/${teamCode}`);
+    meRef=teamRef.child(`members/${myName}`);
+
+    // 내 데이터 초기화
+    meRef.set({name:myName, gold:0, quest:0, online:true, hintReq:false});
+
+    // 팀원 현황 실시간 감지
+    teamRef.child('members').on('value', snap=>{
+        const members=snap.val()||{};
+        updateHUD(members);
+    });
+
+    // 힌트 요청 감지 (내게 온 요청)
+    teamRef.child('hintRequest').on('value', snap=>{
+        const req=snap.val();
+        if(req && req.to===myName && req.status==='pending'){
+            hintReqKey=req.from;
+            el('hint-popup-text').innerText=
+                `${req.from}님이 퀘스트 ${req.quest}번에서 힌트를 요청합니다!\n"${req.questionHint}"`;
+            el('hint-popup').style.display='block';
+        } else {
+            el('hint-popup').style.display='none';
+        }
+    });
+
+    // 팀 전체 완료 감지
+    teamRef.child('questComplete').on('value', snap=>{
+        const qc=snap.val();
+        if(qc && qc.announced){
+            showTeamCompletePopup(qc.quest, qc.bonus);
+            // 내 골드에 보너스 추가
+            addGold(qc.bonus);
+            teamRef.child('questComplete/announced').set(false);
+        }
+    });
+
+    el('team-screen').style.display='none';
+    el('team-hud').style.display='block';
+    showMemoBtn();
+    el('hud-team-name').innerText=`팀: ${teamCode}`;
+}
+
+function startSoloMode(){
+    el('team-screen').style.display='none';
+    showMemoBtn();
+    // HUD 숨김 (솔로 모드)
+}
+
+// ── HUD 업데이트 ───────────────────────────────────────────────────────────
+function updateHUD(members){
+    const el2=el('hud-members');
+    let html='', teamTotal=0;
+    Object.values(members).forEach(m=>{
+        const questStr=m.quest>0?`Q${m.quest}`:'대기';
+        html+=`<div style="display:flex;justify-content:space-between;gap:8px;">
+            <span style="color:#e0e0e0;">${m.name}</span>
+            <span style="color:#aaa;font-size:10px;">${questStr}</span>
+            <span style="color:#f1c40f;">🪙${m.gold||0}</span>
+        </div>`;
+        teamTotal+=(m.gold||0);
+    });
+    el2.innerHTML=html;
+    el('hud-team-gold').innerText=`팀 합계: 🪙 ${teamTotal}G`;
+}
+
+// ── Firebase에 내 골드/퀘스트 동기화 ─────────────────────────────────────
+function syncMyData(){
+    if(!meRef) return;
+    // 오답 수 집계 (퀘스트별)
+    const wrongArr=[
+        gd.q1.w||0, gd.q2.w||0, gd.q3.w||0, gd.q4.w||0,
+        gd.q45.w||0, gd.q5.w||0, 0, gd.q6.w||0, gd.q7.w||0
+    ];
+    const totalCorrect=(gd.q1.c||0)+(gd.q2.c||0)+(gd.q3.c||0)+(gd.q4.c||0)+
+        (gd.q45.c||0)+(gd.q5.c||0)+(gd.q6.c||0)+(gd.q7.c||0);
+    meRef.update({
+        name: myName,
+        gold: gold,
+        quest: currentQuest,
+        passed: passedQuests.join(','),
+        correct: totalCorrect,
+        wrong: wrongArr,
+        hp: pHP,
+        online: true,
+        ts: Date.now()
+    });
+}
+
+// addGold 호출 후 자동 동기화
+const _origAddGoldFB=window.addGold;
+window._fbSyncScheduled=false;
+function fbSyncDebounced(){
+    if(window._fbSyncScheduled) return;
+    window._fbSyncScheduled=true;
+    setTimeout(()=>{ syncMyData(); window._fbSyncScheduled=false; },800);
+}
+
+// ── 퀘스트 완료 시 팀 완료 체크 ─────────────────────────────────────────
+function markQuestPassed(questNum){
+    // 퀘스트 통과 기록 (중복 방지)
+    const key=String(questNum);
+    if(!passedQuests.includes(key)) passedQuests.push(key);
+    syncMyData();
+    checkTeamQuestComplete(questNum);
+}
+
+function checkTeamQuestComplete(questNum){
+    if(!teamRef) return;
+    const key=String(questNum);
+    teamRef.child('members').once('value', snap=>{
+        const members=snap.val()||{};
+        const vals=Object.values(members);
+        const total=vals.length;
+        // 이 퀘스트를 실제로 통과한 인원 (passed 배열에 해당 퀘스트 포함)
+        const passedCount=vals.filter(m=>{
+            const p=m.passed?m.passed.split(','):[];
+            return p.includes(key);
+        }).length;
+        if(total>=2 && passedCount>=teamSize){
+            teamRef.child('questComplete').transaction(cur=>{
+                if(!cur || cur.quest!==questNum){
+                    return {quest:questNum, bonus:QUEST_BONUS_GOLD, announced:true};
+                }
+                return cur;
+            });
+        }
+    });
+}
+
+// ── 힌트 요청 보내기 ────────────────────────────────────────────────────
+function requestHint(questionHint){
+    if(!teamRef) return;
+    // 팀원 중 나 제외한 랜덤 1명에게 요청
+    teamRef.child('members').once('value', snap=>{
+        const members=snap.val()||{};
+        const others=Object.keys(members).filter(n=>n!==myName);
+        if(others.length===0) return;
+        const target=others[Math.floor(Math.random()*others.length)];
+        teamRef.child('hintRequest').set({
+            from:myName, to:target, quest:currentQuest,
+            questionHint:questionHint, status:'pending'
+        });
+        // 힌트 요청 시 소정의 골드 패널티
+        addGold(-HINT_COST);
+        showTeamMsg(`💡 ${target}님에게 힌트 요청 전송 (-${HINT_COST}G)`,'#f39c12');
+    });
+}
+
+// ── 힌트 응답 ────────────────────────────────────────────────────────────
+function replyHint(accept){
+    el('hint-popup').style.display='none';
+    if(!teamRef) return;
+    if(accept){
+        // 요청자에게 힌트 보냄 → 힌트 내용은 게임 자체 힌트 사용
+        teamRef.child('hintRequest').update({status:'accepted'});
+        showTeamMsg(`✔ ${hintReqKey}님에게 힌트를 보냈습니다!`,'#2ecc71');
+    } else {
+        teamRef.child('hintRequest').update({status:'rejected'});
+    }
+    hintReqKey=null;
+}
+
+// ── 팀 전체 통과 팝업 ────────────────────────────────────────────────────
+function showTeamCompletePopup(questNum, bonus){
+    el('team-done-text').innerText=`퀘스트 ${questNum} — 팀 전원 통과!`;
+    el('team-done-bonus').innerText=`팀 보너스 +${bonus}G 획득!`;
+    el('team-done-popup').style.display='block';
+    setTimeout(()=>el('team-done-popup').style.display='none', 5000);
+}
+
+// ── 팀 메시지 (하단 플로팅) ────────────────────────────────────────────
+function showTeamMsg(msg, color){
+    const d=document.createElement('div');
+    d.innerText=msg;
+    d.style.cssText=`position:absolute;bottom:170px;left:50%;transform:translateX(-50%);`+
+        `font-size:16px;font-weight:bold;color:${color};background:rgba(0,0,0,0.85);`+
+        `padding:6px 18px;border-radius:10px;z-index:1600;pointer-events:none;`+
+        `animation:goldFloat 2.5s ease-out forwards;white-space:nowrap;`;
+    document.getElementById('game-container').appendChild(d);
+    setTimeout(()=>d.remove(),2500);
+}
+
+
+/* ================================================================
+   커스텀 숫자패드
+================================================================ */
+let _npTarget=null; // 현재 입력 대상 input 요소
+
+function openNumpad(inputEl){
+    _npTarget=inputEl;
+    const np=document.getElementById('numpad-overlay');
+    np.style.display='flex';
+    // 입력 필드 위치 기준으로 패드 배치
+    const rect=inputEl.getBoundingClientRect();
+    const gc=document.getElementById('game-container').getBoundingClientRect();
+    // 스케일 보정
+    const scale=gc.width/1008;
+    let top=(rect.bottom-gc.top)/scale+10;
+    let left=(rect.left-gc.left)/scale;
+    // 화면 밖으로 나가지 않게 보정
+    if(top+250>750) top=(rect.top-gc.top)/scale-260;
+    if(left+210>990) left=990-210;
+    np.style.top=Math.max(5,top)+'px';
+    np.style.left=Math.max(5,left)+'px';
+    document.getElementById('numpad-display').innerText=inputEl.value||'';
+}
+
+function npInput(v){
+    const disp=document.getElementById('numpad-display');
+    let cur=disp.innerText==='0'?'':disp.innerText;
+    // x= 버튼은 앞에 붙임 (이미 있으면 무시)
+    if(v==='x='){
+        if(!cur.startsWith('x=')) disp.innerText='x='+cur;
+        return;
+    }
+    // 음수 부호: 맨 앞에 토글
+    if(v==='-'){
+        if(cur.startsWith('x=')){
+            const rest=cur.slice(2);
+            disp.innerText='x='+(rest.startsWith('-')?rest.slice(1):'-'+rest);
+        } else {
+            disp.innerText=cur.startsWith('-')?cur.slice(1):'-'+cur;
+        }
+        return;
+    }
+    // 소수점: 하나만 허용
+    if(v==='.' && cur.includes('.')) return;
+    disp.innerText=(cur||'')+v;
+}
+
+function npBack(){
+    const disp=document.getElementById('numpad-display');
+    const cur=disp.innerText;
+    disp.innerText=cur.length>1?cur.slice(0,-1):'0';
+}
+function npClear(){
+    document.getElementById('numpad-display').innerText='0';
+}
+function npConfirm(){
+    if(_npTarget){
+        const val=document.getElementById('numpad-display').innerText;
+        _npTarget.value=val==='0'?'':val;
+        _npTarget.dispatchEvent(new Event('input',{bubbles:true}));
+    }
+    document.getElementById('numpad-overlay').style.display='none';
+    _npTarget=null;
+}
+
+// 게임 내 모든 input.focus → 커스텀 패드 열기 (태블릿 감지 시)
+function isTouchDevice(){
+    return ('ontouchstart' in window)||navigator.maxTouchPoints>0;
+}
+
+document.addEventListener('focusin',function(e){
+    const el=e.target;
+    if(!isTouchDevice()) return;
+    if(el.tagName!=='INPUT') return;
+    // 팀 입력 화면 텍스트 필드는 제외
+    if(['inp-pname','inp-tcode','inp-fb-db','inp-fb-api','inp-fb-proj','inp-fb-app'].includes(el.id)) return;
+    // 메모장 내부 제외
+    if(el.closest && el.closest('#memo-pad')) return;
+    // 기본 키보드 방지 후 커스텀 패드 열기
+    el.blur();
+    setTimeout(()=>openNumpad(el),50);
+});
+
+// 패드 외부 클릭 시 닫기
+document.addEventListener('pointerdown',function(e){
+    const np=document.getElementById('numpad-overlay');
+    if(np.style.display!=='none' && !np.contains(e.target)){
+        np.style.display='none';
+        _npTarget=null;
+    }
+});
+
+/* ================================================================
+   메모장
+================================================================ */
+let _memoDragX=0,_memoDragY=0,_memoDragging=false;
+
+function toggleMemo(){
+    const mp=document.getElementById('memo-pad');
+    mp.style.display=mp.style.display==='flex'?'none':'flex';
+}
+function clearMemo(){
+    if(confirm('메모 내용을 모두 지우시겠습니까?'))
+        document.getElementById('memo-textarea').value='';
+}
+
+// 메모장 드래그
+const memoHeader=document.getElementById('memo-header');
+if(memoHeader){
+    memoHeader.addEventListener('pointerdown',function(e){
+        _memoDragging=true;
+        const mp=document.getElementById('memo-pad');
+        const rect=mp.getBoundingClientRect();
+        _memoDragX=e.clientX-rect.left;
+        _memoDragY=e.clientY-rect.top;
+        memoHeader.setPointerCapture(e.pointerId);
+    });
+    memoHeader.addEventListener('pointermove',function(e){
+        if(!_memoDragging) return;
+        const mp=document.getElementById('memo-pad');
+        mp.style.left=(e.clientX-_memoDragX)+'px';
+        mp.style.top=(e.clientY-_memoDragY)+'px';
+        mp.style.transform='none';
+    });
+    memoHeader.addEventListener('pointerup',function(){_memoDragging=false;});
+}
+
+// 메모 버튼: 게임 시작 후 표시
+function showMemoBtn(){
+    const btn=document.getElementById('memo-toggle-btn');
+    if(btn) btn.style.display='block';
+}
+
+/* ================================================================
+   개발자 점프 버튼 (개발 완료 후 삭제)
+================================================================ */
+function devReset(){
+    pHP=100; isPerfect=true; correctCount=0; hasWeapon=false; hasSeenFeedback=false; gold=0;
+    q1IntroShown=false;
+    Object.keys(gd).forEach(k=>{if(gd[k]&&typeof gd[k]==='object'){gd[k].c=0;gd[k].w=0;}});
+    ['q3-overlay','q4-overlay','q45-overlay','q5-overlay','q55-overlay','q6-overlay','q7-overlay',
+     'feedback-screen','opening-screen'].forEach(id=>{
+        const e=document.getElementById(id);if(e)e.style.display='none';
+    });
+    el('full-overlay').style.display='none';
+    el('overlay-msg').style.display='none';
+    el('knight').style.display='block';
+    el('target').style.display='block';
+    cleanDots();
+    ctx('grid-layer').clearRect(0,0,1000,750);
+    ctx('graph-layer').clearRect(0,0,1000,750);
+    const q6l=document.getElementById('q6-dots-layer');if(q6l)q6l.innerHTML='';
+    const ov=document.getElementById('ov-feedback-btn');if(ov)ov.remove();
+    updateUI();
+}
+function devGo(q){
+    devReset();
+    if(q===1)          {showTopUI(true);shuffleQ1();setupQ1();}
+    else if(q===2)     {currentLevel=2;startQ2();}
+    else if(q===3)     {currentLevel=3;startQ3Ov();}
+    else if(q===4)     {currentLevel=4;showTopUI(false);startQ4();}
+    else if(q===4.5)   {currentLevel=4;showTopUI(false);startQ45();}
+    else if(q===5)     {currentLevel=5;hasWeapon=true;showTopUI(false);startQ5();}
+    else if(q===5.5)   {currentLevel=5;hasWeapon=true;showTopUI(false);startQ55();}
+    else if(q===6)     {currentLevel=6;hasWeapon=true;showTopUI(false);startQ6();}
+    else if(q===7)     {currentLevel=7;hasWeapon=true;showTopUI(false);startQ7();}
+    else if(q==='fb')  {showFeedback();}
+    // ── 결과 화면 바로가기 ──
+    else if(q==='q1no')  {currentLevel=1;showTopUI(true);failQ1HP();}
+    else if(q==='q1no')  {currentLevel=1;showTopUI(true);failQ1HP();}
+    else if(q==='q1ok')  {currentLevel=1;showTopUI(true);finishQ1();}
+    else if(q==='q2no')  {currentLevel=2;showTopUI(false);
+                          cleanDots();ctx('graph-layer').clearRect(0,0,1000,750);
+                          showOv('assets/b2.png','비밀번호를 풀지 못해\n마법의 숲으로 들어갈 수 없습니다...\n여기까지의 결과를 확인해보세요.',()=>showFeedback());}
+    else if(q==='q3no')  {currentLevel=3;showTopUI(false);
+                          el('q3-overlay').style.display='none';
+                          showOv('assets/m_secret1.png','비밀번호를 풀지 못해\n마법의 숲으로 들어갈 수 없습니다...\n여기까지의 결과를 확인해보세요.',()=>showFeedback());}
+    else if(q==='q2no')  {currentLevel=2;showTopUI(false);cleanDots();ctx('graph-layer').clearRect(0,0,1000,750);showOv('assets/b2.png','몬스터의 성으로 가는 길을 찾지 못해\\n모험을 이어가지 못합니다...\\n여기까지의 결과를 확인해보세요.',()=>showFeedback());}
+    else if(q==='q2ok')  {currentLevel=2;showTopUI(false);finishQ2();}
+    else if(q==='q3ok')  {currentLevel=3;showTopUI(false);finishQ3Ov();}
+    else if(q==='q4no')  {currentLevel=4;showTopUI(false);el('q4-overlay').style.display='block';failQ4();}
+    else if(q==='q4no')  {currentLevel=4;showTopUI(false);el('q4-overlay').style.display='block';failQ4();}
+    else if(q==='q4ok')  {currentLevel=4;showTopUI(false);el('q4-overlay').style.display='block';finishQ4();}
+    else if(q==='q4.5ok'){currentLevel=4;showTopUI(false);el('q45-overlay').style.display='block';hasWeapon=true;finishQ45();}
+    else if(q==='q4.5no'){currentLevel=4;showTopUI(false);el('q45-overlay').style.display='block';failQ45();}
+    else if(q==='q5ok')  {currentLevel=5;hasWeapon=true;showTopUI(false);el('q5-overlay').style.display='block';finishQ5();}
+    else if(q==='q5no')  {currentLevel=5;hasWeapon=true;showTopUI(false);el('q5-overlay').style.display='block';failQ5();}
+    else if(q==='q5.5no'){currentLevel=5;hasWeapon=true;showTopUI(false);
+                          el('q55-overlay').style.display='none';
+                          showOv('assets/mk_fail3.png','체력이 부족하여 문을 열지 못했습니다...',()=>showFeedback());}
+    else if(q==='q5.5ok'){currentLevel=5;hasWeapon=true;showTopUI(false);el('q55-overlay').style.display='block';
+                          submitQ55._devSkip=true;pHP=100;
+                          showOv('assets/lockeddoor.png','🔓 딸깍! 문이 열렸습니다! 안으로 들어간다...',()=>startQ6());}
+    else if(q==='q6ok')  {currentLevel=6;hasWeapon=true;showTopUI(false);el('q6-overlay').style.display='block';finishQ6();}
+    else if(q==='q6no')  {currentLevel=6;hasWeapon=true;showTopUI(false);el('q6-overlay').style.display='block';failQ6();}
+    else if(q==='q7ok')  {currentLevel=7;hasWeapon=true;showTopUI(false);el('q7-overlay').style.display='block';
+                          q7LastTwo=[true,true];finishQ7();}
+    else if(q==='q7no')  {currentLevel=7;hasWeapon=true;showTopUI(false);el('q7-overlay').style.display='block';failQ7();}
+    else if(q==='end')   {currentLevel=7;hasWeapon=true;
+                          q7LastTwo=[true,true];
+                          showOv('assets/mk_victory1.png','미노타우루스를 쓰러뜨렸다!\n어둠의 힘이 사라졌다!',()=>{
+                            showOv('assets/success4.png','⚔️ 미노타우루스 몬스터를 물리쳤다!\n용사여, 그대는 진정한 이차함수의 마스터!\n모든 퀘스트를 완료하였습니다! 🏆',()=>{
+                              showOv('assets/ending1.png','용사의 활약으로 마을에 평화가 찾아왔습니다.\n사람들은 서로를 아끼며 화목하게 살아가고,\n왕국 곳곳에 웃음꽃이 피어났습니다. 🌸\n\n수고했어요! 이차함수 완전 정복! 🎉',()=>showFeedback(),false,'🎉 피드백 보기');
+                            });
+                          });}
+}
+
+/* ================================================================
+   재시작 (오프닝 없이 Q1으로)
+================================================================ */
+function restartFromQ1(){
+    // 상태 초기화
+    pHP=100; currentLevel=1; currentQuest=1; qCount=1;
+    isPerfect=true; correctCount=0;
+    q1IntroShown=false; hasSeenFeedback=false; gold=0; gd.q1={c:0,w:0}; gd.q2={c:0,w:0}; gd.q3={c:0,w:0}; gd.q4={c:0,w:0}; gd.q45={c:0,w:0}; gd.q5={c:0,w:0}; gd.q6={c:0,w:0}; gd.q7={c:0,w:0};
+    hasWeapon=false;
+    // 화면 초기화
+    el('feedback-screen').style.display='none';
+    el('q3-overlay').style.display='none';
+    el('q4-overlay').style.display='none';
+    el('q45-overlay').style.display='none';
+    el('q5-overlay').style.display='none';
+    el('q55-overlay').style.display='none';
+    el('q6-overlay').style.display='none';
+    el('q7-overlay').style.display='none';
+    el('full-overlay').style.display='none';
+    el('overlay-msg').style.display='none';
+    el('knight').style.display='block';
+    el('target').style.display='block';
+    cleanDots();
+    ctx('grid-layer').clearRect(0,0,1000,750);
+    ctx('graph-layer').clearRect(0,0,1000,750);
+    updateUI();
+    showTopUI(true);
+    shuffleQ1();
+    setupQ1();
+}
+
+/* ================================================================
+   시작
+================================================================ */
+const openingFrames=[
+    {
+        src:'assets/opening1.png',
+        msg:'평화로운 왕국. 마을 사람들은 웃으며 서로를 돕고, 하루하루를 행복하게 살아가고 있었다.'
+    },
+    {
+        src:'assets/opening2.png',
+        msg:'그러던 어느 날...\n어둠 속에 숨어 있던 몬스터의 악의 기운이\n마을 전체로 서서히, 소리 없이 스며들기 시작했다.'
+    },
+    {
+        src:'assets/opening3.png',
+        msg:'악의 기운에 물든 마을 사람들은\n원인 모를 불안과 고통에 시달리기 시작했다.\n마음 깊은 곳에서부터 어둠이 자라났다...'
+    },
+    {
+        src:'assets/opening4.png',
+        msg:'마침내 악에 완전히 조종당한 사람들은\n가장 가까운 이웃을, 친구를, 가족을 의심하고 비난하며\n서로에게 상처를 주기 시작했다!'
+    },
+    {
+        src:'assets/opening5.png',
+        msg:'"이대로 둘 수 없다!"\n이 모습을 지켜보던 용사는 주먹을 꽉 쥐었다.\n몬스터를 찾아 악의 근원을 끊어내기 위해,\n용사는 길을 떠난다!'
+    },
+];
+
+function playOpening(idx){
+    // 오프닝 진행 중 메모 숨기기
+    const memoEl=document.getElementById('memo-pad');
+    if(memoEl) memoEl.style.display='none';
+
+    // 기존 '다음으로' 버튼 제거
+    const oldBtn=document.getElementById('opening-next-btn');
+    if(oldBtn) oldBtn.remove();
+
+    const scr=el('opening-screen');
+
+    if(idx >= openingFrames.length){
+        // 오프닝 종료 → Q1 시작
+        scr.style.transition='opacity 0.6s';
+        scr.style.opacity='0';
+        setTimeout(()=>{
+            scr.style.display='none';
+            scr.style.opacity='';
+            scr.style.transition='';
+            showTopUI(true);
+            shuffleQ1();
+            setupQ1();
+            updateUI();
+        },650);
+        return;
+    }
+
+    const f=openingFrames[idx];
+
+    // display를 먼저 block으로 설정, opacity=0에서 시작
+    scr.style.display='flex';
+    scr.style.opacity='0';
+    scr.style.transition='none';
+    el('opening-img').src=f.src;
+    el('opening-msg').innerText=f.msg;
+
+    // 다음 프레임에서 페이드인 시작
+    requestAnimationFrame(()=>{
+        requestAnimationFrame(()=>{
+            scr.style.transition='opacity 1.5s';
+            scr.style.opacity='1';
+        });
+    });
+
+    // '다음으로' 버튼 생성
+    const nextBtn=document.createElement('button');
+    nextBtn.id='opening-next-btn';
+    nextBtn.innerText= idx < openingFrames.length-1 ? '다음으로 ▶' : '모험 시작! ▶';
+    nextBtn.style.cssText=
+        'position:absolute;bottom:16px;right:20px;z-index:920;'+
+        'padding:9px 22px;font-size:15px;font-weight:bold;cursor:pointer;'+
+        'border-radius:10px;border:2px solid #f1c40f;'+
+        'background:rgba(0,0,0,0.75);color:#f1c40f;'+
+        'pointer-events:all;';
+
+    let advanced=false;
+    let autoTimer=null;
+    function goNext(){
+        if(advanced) return;
+        advanced=true;
+        if(autoTimer) clearTimeout(autoTimer);
+        const ob=document.getElementById('opening-next-btn');
+        if(ob) ob.remove();
+        scr.style.transition='opacity 0.8s';
+        scr.style.opacity='0';
+        setTimeout(()=>playOpening(idx+1), 820);
+    }
+    nextBtn.onclick=goNext;
+    scr.appendChild(nextBtn);
+
+    // 6초 후 자동으로 넘어감
+    autoTimer=setTimeout(goNext, 6000);
+}
+
+
+/* ================================================================
+   피드백
+================================================================ */
+function showFeedback(){
+    hasSeenFeedback=true;
+    el('feedback-screen').style.display='block';
+    const goldEl=document.getElementById('fb-gold');
+    if(goldEl)goldEl.innerText=`🪙 최종 골드: ${gold}G`;
+    const areas=[
+        {
+            key:'q1', name:"이차함수 판별 (QUEST 1)",
+            c:gd.q1.c, w:gd.q1.w,
+            desc:"y=ax²+bx+c 꼴(a≠0)인지 판별하는 문제입니다.\nx의 최고차항이 2차인지, a가 0이 아닌지 확인하세요.",
+            retry:()=>{
+                el('feedback-screen').style.display='none';
+                currentQuest=1;qCount=1;correctCount=0;isPerfect=true;pHP=100;
+                showTopUI(true);el('knight').style.display='block';el('target').style.display='block';
+                el('bg-layer').style.backgroundImage="url('assets/b1.png')";
+                el('grid-layer').style.display='block';el('graph-layer').style.display='block';
+                updateUI();shuffleQ1();setupQ1();
+            }
+        },
+        {
+            key:'q2', name:"y=ax² 그래프 위의 점 찾기 (QUEST 2)",
+            c:gd.q2.c, w:gd.q2.w,
+            desc:"x값을 y=ax²에 대입해 y값을 계산하는 문제입니다.\na의 부호(양수↔볼록 방향)와 크기(그래프 폭)를 이해하세요.",
+            retry:()=>{el('feedback-screen').style.display='none';startQ2();}
+        },
+        {
+            key:'q3', name:"그래프 보고 함수식 찾기 (QUEST 3)",
+            c:gd.q3.c, w:gd.q3.w,
+            desc:"y=ax²에서 a의 크기와 부호로 그래프 모양이 결정됩니다.\na>0이면 아래로 볼록, a<0이면 위로 볼록.\n|a|가 클수록 폭이 좁아집니다.",
+            retry:()=>{el('feedback-screen').style.display='none';pHP=100;updateUI();startQ3Ov();}
+        },
+        {
+            key:'q4', name:"이차함수 평행이동 (QUEST 4)",
+            c:gd.q4.c, w:gd.q4.w,
+            desc:"y=ax²를 x축으로 p만큼, y축으로 q만큼 평행이동하면\ny=a(x-p)²+q가 됩니다.\n꼭짓점 이동 방향과 크기를 파악하세요.",
+            retry:()=>{el('feedback-screen').style.display='none';pHP=100;updateUI();startQ4();}
+        },
+        {
+            key:'q45', name:"일반형→표준형 변환 (QUEST 4.5)",
+            c:gd.q45.c, w:gd.q45.w,
+            desc:"y=ax²+bx+c 를 완전제곱식으로 변환합니다.\na=1: x²+bx = (x+b/2)²-(b/2)²\na≠1: a를 먼저 묶어낸 뒤 완전제곱식을 만드세요.",
+            retry:()=>{el('feedback-screen').style.display='none';pHP=100;updateUI();startQ45();}
+        },
+        {
+            key:'q5', name:"슬라임 몬스터 격투 (QUEST 5)",
+            c:gd.q5.c, w:gd.q5.w,
+            desc:"y=a(x-p)²+q에서 축의 방정식은 x=p, 꼭짓점은 (p,q)입니다.\nq=0이면 꼭짓점은 원점 위에, p=0이면 y축이 축입니다.",
+            retry:()=>{el('feedback-screen').style.display='none';pHP=100;updateUI();startQ5();}
+        },
+        {
+            key:'q55', name:"잠긴 문 (QUEST 5.5)",
+            c:gd.q55?gd.q55.c:0, w:gd.q55?gd.q55.w:0,
+            desc:"일반형을 표준형으로 변환하여 잠긴 문을 열어야 합니다.",
+            retry:()=>{el('feedback-screen').style.display='none';pHP=100;updateUI();startQ55();}
+        },
+        {
+            key:'q6', name:"이차함수 그래프 그리기 (QUEST 6)",
+            c:gd.q6.c, w:gd.q6.w,
+            desc:"y=ax²+bx+c를 표준형으로 변환하여 꼭짓점(p,q)과 y절편(c)을 찾고\n그래프의 볼록 모양(a>0:아래볼록, a<0:위볼록)을 판단하세요.",
+            retry:()=>{el('feedback-screen').style.display='none';pHP=100;updateUI();startQ6();}
+        },
+        {
+            key:'q7', name:"미노타우루스 최종 결전 (QUEST 7)",
+            c:gd.q7.c, w:gd.q7.w,
+            desc:"이차함수의 미지수 구하기:\n① 일반형 → 축/꼭짓점/y절편\n② 조건으로 a,b,c 결정",
+            retry:()=>{el('feedback-screen').style.display='none';pHP=100;updateUI();startQ7();}
+        },
+    ];
+
+    const tot=areas.reduce((s,a)=>s+a.c+a.w,0);
+    const totC=areas.reduce((s,a)=>s+a.c,0);
+    const acc=tot>0?Math.round(totC/tot*100):0;
+    function bc(r){return r>=0.7?'#2ecc71':r>=0.5?'#f1c40f':'#e74c3c';}
+
+    let barsH=areas.map(a=>{
+        const t=a.c+a.w;if(!t)return'';
+        const r=a.c/t,p=Math.round(r*100),c=bc(r);
+        return`<div class="fb-row">
+            <span style="min-width:220px;font-size:12px;color:#ccc">${a.name}</span>
+            <div class="fb-bar-bg"><div class="fb-bar-fill" style="width:${p}%;background:${c}"></div></div>
+            <span style="min-width:44px;text-align:right;color:${c};font-weight:bold">${p}%</span>
+            <span style="color:#888;font-size:11px">(${a.c}/${t})</span>
+        </div>`;
+    }).join('');
+
+    // 부족한 부분: 70% 미만
+    const badAreas=areas.filter(a=>(a.c+a.w)>0&&a.c/(a.c+a.w)<0.7);
+    let badH='';
+    if(badAreas.length>0){
+        badH=badAreas.map((a,i)=>{
+            const t=a.c+a.w,r=a.c/t,p=Math.round(r*100),c=bc(r);
+            const label=r>=0.5?'📌 조금 더 노력':'🔥 집중 보완';
+            return`<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:10px 12px;margin-bottom:8px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                    <span style="color:${c};font-weight:bold;font-size:13px;">${label}: ${a.name} (${p}%)</span>
+                    <button id="retry_${i}" style="padding:5px 14px;font-size:12px;cursor:pointer;border-radius:6px;border:1px solid ${c};background:rgba(0,0,0,0.6);color:${c};font-weight:bold;">🔄 다시 도전</button>
+                </div>
+                <div style="color:#ccc;font-size:12px;line-height:1.7;white-space:pre-line;">${a.desc}</div>
+            </div>`;
+        }).join('');
+    } else {
+        badH='<div style="color:#2ecc71;font-size:13px;padding:8px 0;">🎉 모든 영역을 훌륭하게 수행했습니다!</div>';
+    }
+
+    const good=areas.filter(a=>(a.c+a.w)>0&&a.c/(a.c+a.w)>=0.7);
+    const goodT=good.map(a=>{
+        const t=a.c+a.w,r=a.c/t,p=Math.round(r*100),co=bc(r);
+        return `<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(46,204,113,0.3);border-radius:8px;padding:8px 12px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;">
+            <span style="color:#2ecc71;font-size:13px;font-weight:bold;">✔ ${a.name} (${p}%)</span>
+            <button id="good_retry_${a.key}" style="padding:4px 12px;font-size:12px;cursor:pointer;border-radius:6px;border:1px solid #2ecc71;background:rgba(0,0,0,0.6);color:#2ecc71;font-weight:bold;">🔄 다시 풀기</button>
+        </div>`;
+    }).join('')||'<span style="color:#888;font-size:12px">해당 없음</span>';
+
+    let comm='';
+    if(acc>=85)comm='🏆 훌륭합니다! 이차함수의 핵심 개념을 잘 이해하고 있어요!';
+    else if(acc>=70)comm='👍 좋은 성과! 부족한 부분을 한 번 더 복습해봐요.';
+    else if(acc>=50)comm='📚 기초부터 차근차근 복습해보세요.';
+    else comm='💪 아래 재도전 버튼을 눌러 다시 연습해봐요!';
+
+    el('fb-content').innerHTML=`
+        <div class="fb-section">
+            <div class="fb-section-title" style="color:#f1c40f">🎯 전체 성적</div>
+            <div style="text-align:center;font-size:42px;font-weight:900;color:${acc>=70?'#2ecc71':acc>=50?'#f1c40f':'#e74c3c'}">${acc}점</div>
+            <div style="text-align:center;color:#aaa;font-size:12px;margin-top:4px">총 ${totC} / ${tot} 정답</div>
+            <div class="fb-comment" style="margin-top:8px">${comm}</div>
+        </div>
+        <div class="fb-section">
+            <div class="fb-section-title" style="color:#4fc3f7">📈 영역별 정확도</div>
+            ${barsH}
+        </div>
+        <div class="fb-section">
+            <div class="fb-section-title" style="color:#2ecc71">💪 잘하는 부분</div>
+            <div style="margin-bottom:4px">${goodT}</div>
+        </div>
+        <div class="fb-section">
+            <div class="fb-section-title" style="color:#e74c3c;margin-bottom:10px">🔥 부족한 부분 & 재도전</div>
+            ${badH}
+        </div>`;
+
+    badAreas.forEach((a,i)=>{
+        const btn=document.getElementById('retry_'+i);
+        if(btn)btn.onclick=a.retry;
+    });
+    good.forEach(a=>{
+        const btn=document.getElementById('good_retry_'+a.key);
+        if(btn&&a.retry)btn.onclick=a.retry;
+    });
+
+    setTimeout(()=>{
+        document.querySelectorAll('.fb-bar-fill').forEach(e=>{
+            const w=e.style.width;e.style.width='0';setTimeout(()=>e.style.width=w,50);
+        });
+    },100);
+}
+
+/* ================================================================
+   공통 유틸리티
+================================================================ */
+function el(id){return document.getElementById(id);}
+function ctx(id){return el(id).getContext('2d');}
+
+function showTopUI(show){
+    el('top-ui').style.display=show?'flex':'none';
+    el('bottom-panel').style.display=show?'flex':'none';
+}
+
+function setTopUI(title,prog){
+    el('q-title').innerText=title;
+    el('q-prog').innerText=prog;
+}
+
+
+function addGold(amount){
+    gold+=amount;
+    updateUI();
+    fbSyncDebounced(); // Firebase 동기화
+    // 골드 획득 플로팅 메시지
+    const msg=document.createElement('div');
+    msg.innerText=`+${amount}G`;
+    msg.style.cssText='position:absolute;right:30px;top:80px;font-size:22px;font-weight:bold;'+
+        'color:#f1c40f;text-shadow:2px 2px 6px #000;z-index:9000;pointer-events:none;'+
+        'animation:goldFloat 1.2s ease-out forwards;';
+    document.getElementById('game-container').appendChild(msg);
+    setTimeout(()=>msg.remove(),1200);
+}
+
+function updateUI(){
+    el('p-hp-fill').style.width=pHP+'%';
+    el('lv-text').innerText=`LV.${currentLevel} 용사`;
+    // 메인 골드 표시
+    const gd_el=document.getElementById('gold-display');
+    if(gd_el)gd_el.innerText=`🪙 ${gold}`;
+    // 각 퀘스트 골드 표시 동기화
+    ['q3','q4','q45','q5','q55','q6','q7'].forEach(q=>{
+        const el2=document.getElementById(q+'-gold-display');
+        if(el2)el2.innerText=gold;
+    });
+    const q3hp=document.getElementById('q3-hp-fill');
+    const q3num=document.getElementById('q3-hp-num');
+    if(q3hp){q3hp.style.width=pHP+'%';q3hp.style.background=pHP>50?'linear-gradient(to right,#2ecc71,#27ae60)':pHP>25?'linear-gradient(to right,#f39c12,#e67e22)':'linear-gradient(to right,#e74c3c,#c0392b)';}
+    if(q3num){q3num.innerText=pHP;q3num.style.color=pHP>50?'#2ecc71':pHP>25?'#f39c12':'#e74c3c';}
+}
+
+// 피드백 경험 후 퀘스트 종료 화면에서 '피드백 화면으로' 버튼 포함 버전
+function showOvFB(img,msg,cb){
+    showOv(img,msg,cb,hasSeenFeedback);
+}
+
+function showOv(img,msg,cb,offerFeedback=false,btnLabel=null){
+    // 전체화면 오버레이 열릴 때 메모 숨기기
+    const _memo=document.getElementById('memo-pad');
+    const _memoWasOpen=_memo&&_memo.style.display==='flex';
+    if(_memo)_memo.style.display='none';
+    el('full-overlay').style.backgroundImage=`url('${img}')`;
+    el('full-overlay').style.backgroundSize='cover';
+    el('full-overlay').style.display='block';
+    el('overlay-msg').innerText=msg;
+    el('overlay-msg').style.fontSize=msg.length>80?'26px':msg.length>50?'32px':'38px';
+    // ending1 이미지는 상단 배치 (얼굴이 아래에 있으므로 글자를 위로)
+    if(img&&img.includes('ending1')){
+        el('overlay-msg').style.top='40px';
+        el('overlay-msg').style.bottom='auto';
+        el('overlay-msg').style.transform='none';
+    } else {
+        el('overlay-msg').style.top='50%';
+        el('overlay-msg').style.bottom='auto';
+        el('overlay-msg').style.transform='translateY(-50%)';
+    }
+    el('overlay-msg').style.display='block';
+    const existFb=document.getElementById('ov-feedback-btn');
+    if(existFb)existFb.remove();
+    // offerFeedback=true 이거나, 피드백 경험 후 퀘스트 종료 화면인 경우 버튼 표시
+    if(offerFeedback){
+        const fb=document.createElement('button');
+        fb.id='ov-feedback-btn';
+        fb.innerText='📊 피드백 화면으로';
+        fb.style.cssText='position:absolute;bottom:60px;left:50%;transform:translateX(-50%);padding:8px 24px;font-size:16px;font-weight:bold;cursor:pointer;border-radius:10px;background:rgba(40,20,80,0.95);border:2px solid #9b59b6;color:#c39bd3;z-index:520;';
+        fb.onclick=()=>{
+            clearTimeout(fb._timer);
+            fb.remove();
+            el('full-overlay').style.display='none';
+            el('overlay-msg').style.display='none';
+            showFeedback();
+        };
+        document.getElementById('game-container').appendChild(fb);
+    }
+    // '시작하기' 버튼이 있으면 자동 진행 없이 버튼 클릭 대기
+    if(btnLabel){
+        const startBtn=document.createElement('button');
+        startBtn.id='ov-start-btn';
+        startBtn.innerText=btnLabel;
+        startBtn.style.cssText='position:absolute;bottom:32px;left:50%;transform:translateX(-50%);'+
+            'padding:10px 32px;font-size:17px;font-weight:bold;cursor:pointer;'+
+            'border-radius:12px;border:2px solid #f1c40f;background:rgba(40,20,80,0.95);'+
+            'color:#f1c40f;z-index:520;';
+        let _startClicked=false;
+        startBtn.onclick=()=>{
+            if(_startClicked)return;
+            _startClicked=true;
+            startBtn.style.display='none'; // 즉시 숨김
+            startBtn.remove();
+            const fb=document.getElementById('ov-feedback-btn');if(fb)fb.remove();
+            el('full-overlay').style.display='none';el('overlay-msg').style.display='none';
+            if(_memoWasOpen){const _m2=document.getElementById('memo-pad');if(_m2)_m2.style.display='flex';}
+            if(cb)cb();
+        };
+        document.getElementById('game-container').appendChild(startBtn);
+        // 피드백 버튼도 타이머 없이
+        const fbBtn2=document.getElementById('ov-feedback-btn');
+        if(fbBtn2)fbBtn2._timer=null;
+        return;
+    }
+    const d=msg.length>100?5000:6000;
+    const timer=setTimeout(()=>{
+        const b2=document.getElementById('ov-feedback-btn');if(b2)b2.remove();
+        const bs=document.getElementById('ov-start-btn');if(bs)bs.remove();
+        el('full-overlay').style.display='none';el('overlay-msg').style.display='none';
+        if(_memoWasOpen){const _m2=document.getElementById('memo-pad');if(_m2)_m2.style.display='flex';}
+        if(cb)cb();
+    },d);
+    const fbBtn=document.getElementById('ov-feedback-btn');
+    if(fbBtn)fbBtn._timer=timer;
+}
+
+// bless1 전용: 이미지 가로세로 모두 보이도록 contain + 어두운 배경
+function showOvContain(img,msg,cb){
+    // 전체화면 시 메모 숨기기
+    const _memoC=document.getElementById('memo-pad');
+    const _memoWasOpenC=_memoC&&_memoC.style.display==='flex';
+    if(_memoC)_memoC.style.display='none';
+    const ov=el('full-overlay');
+    ov.style.backgroundImage=`url('${img}')`;
+    ov.style.backgroundSize='contain';
+    ov.style.backgroundRepeat='no-repeat';
+    ov.style.backgroundPosition='center';
+    ov.style.backgroundColor='rgba(0,0,0,0.82)';
+    ov.style.display='block';
+    el('overlay-msg').innerText=msg;
+    el('overlay-msg').style.fontSize='28px';
+    el('overlay-msg').style.display='block';
+    // 텍스트를 이미지 아래쪽에 배치
+    el('overlay-msg').style.top='auto';
+    el('overlay-msg').style.bottom='30px';
+    el('overlay-msg').style.transform='none';
+    const d=5500;
+    setTimeout(()=>{
+        // 위치 초기화
+        el('overlay-msg').style.top='50%';
+        el('overlay-msg').style.bottom='auto';
+        el('overlay-msg').style.transform='translateY(-50%)';
+        ov.style.backgroundSize='cover';
+        ov.style.backgroundColor='';
+        ov.style.display='none';
+        el('overlay-msg').style.display='none';
+        if(cb)cb();
+    },d);
+}
+
+function showSmall(msg,color){
+    el('small-msg').innerText=msg;el('small-msg').style.color=color;
+    el('small-msg').style.display='block';
+    setTimeout(()=>el('small-msg').style.display='none',2000);
+}
+
+function knightAnim(img,delay){
+    el('knight').style.backgroundImage=`url('${img}')`;
+    setTimeout(()=>el('knight').style.backgroundImage="url('assets/k_solo.jpg')",delay);
+}
+
+function cleanDots(){document.querySelectorAll('.grid-dot').forEach(d=>d.remove());}
+
+function drawGrid(){
+    const c=ctx('grid-layer');c.clearRect(0,0,1000,750);
+    c.strokeStyle='rgba(255,255,255,0.25)';c.fillStyle='#fff';c.font='bold 17px Arial';
+    for(let i=-8;i<=8;i++){
+        c.beginPath();c.moveTo(CX+i*UNIT,0);c.lineTo(CX+i*UNIT,750);c.stroke();
+        c.beginPath();c.moveTo(0,CY-i*UNIT);c.lineTo(1000,CY-i*UNIT);c.stroke();
+        if(i!==0){c.fillText(i,CX+i*UNIT-8,CY+24);c.fillText(i,CX-32,CY-i*UNIT+6);}
+    }
+    c.strokeStyle='#f1c40f';c.lineWidth=3;
+    c.beginPath();c.moveTo(0,CY);c.lineTo(1000,CY);c.stroke();
+    c.beginPath();c.moveTo(CX,0);c.lineTo(CX,750);c.stroke();
+    c.fillText('0',CX-18,CY+24);
+}
+
+function drawParabola(){
+    const c=ctx('graph-layer');c.strokeStyle='#f1c40f';c.lineWidth=8;c.beginPath();
+    const{a,p,q}=currentFunc;
+    for(let x=-7;x<=7;x+=0.1){
+        const sx=CX+x*UNIT,sy=CY-(a*Math.pow(x-p,2)+q)*UNIT;
+        x===-7?c.moveTo(sx,sy):c.lineTo(sx,sy);
+    }
+    c.stroke();
+}
+
+// 하나의 캔버스에 여러 포물선 그리기
+function drawCombinedParabolas(canvas,graphs,colors){
+    const c=canvas.getContext('2d');
+    const w=canvas.width,h=canvas.height;
+    c.clearRect(0,0,w,h);
+    c.fillStyle='rgba(10,5,25,1)';c.fillRect(0,0,w,h);
+    const cx=w/2,cy=h*0.45,scX=w/16,scY=h/22;
+    c.strokeStyle='rgba(255,255,255,0.15)';c.lineWidth=0.7;
+    for(let i=-8;i<=8;i++){c.beginPath();c.moveTo(cx+i*scX,0);c.lineTo(cx+i*scX,h);c.stroke();}
+    for(let j=-5;j<=6;j++){c.beginPath();c.moveTo(0,cy-j*scY);c.lineTo(w,cy-j*scY);c.stroke();}
+    c.strokeStyle='#f1c40f';c.lineWidth=1.8;
+    c.beginPath();c.moveTo(0,cy);c.lineTo(w,cy);c.stroke();
+    c.beginPath();c.moveTo(cx,0);c.lineTo(cx,h);c.stroke();
+    c.fillStyle='#f1c40f';c.font='bold 11px Arial';
+    c.fillText('x',w-10,cy-4);c.fillText('y',cx+4,10);
+    c.fillStyle='rgba(255,255,255,0.5)';c.font='9px Arial';
+    for(let i=-6;i<=6;i+=2)if(i!==0)c.fillText(i,cx+i*scX-5,cy+12);
+    graphs.forEach((g,idx)=>{
+        c.strokeStyle=colors[idx];c.lineWidth=2.5;c.shadowColor=colors[idx];c.shadowBlur=6;
+        c.beginPath();let first=true;
+        for(let x=-8;x<=8;x+=0.07){
+            const y=g.a*x*x,sx=cx+x*scX,sy=cy-y*scY;
+            if(sy<-5||sy>h+5){first=true;continue;}
+            first?c.moveTo(sx,sy):c.lineTo(sx,sy);first=false;
+        }
+        c.stroke();c.shadowBlur=0;
+        // 라벨은 버튼으로 표시하므로 캔버스에는 그리지 않음
+    });
+}
+
+/* ================================================================
+   오프닝 씬
+================================================================ */
+
+
+
+
+
+/* ================================================================
+   개발자 점프 버튼 (개발 완료 후 삭제)
+================================================================ */
+function devReset(){
+    pHP=100; isPerfect=true; correctCount=0; hasWeapon=false; hasSeenFeedback=false; gold=0;
+    q1IntroShown=false;
+    Object.keys(gd).forEach(k=>{if(gd[k]&&typeof gd[k]==='object'){gd[k].c=0;gd[k].w=0;}});
+    ['q3-overlay','q4-overlay','q45-overlay','q5-overlay','q55-overlay','q6-overlay','q7-overlay',
+     'feedback-screen','opening-screen'].forEach(id=>{
+        const e=document.getElementById(id);if(e)e.style.display='none';
+    });
+    el('full-overlay').style.display='none';
+    el('overlay-msg').style.display='none';
+    el('knight').style.display='block';
+    el('target').style.display='block';
+    cleanDots();
+    ctx('grid-layer').clearRect(0,0,1000,750);
+    ctx('graph-layer').clearRect(0,0,1000,750);
+    const q6l=document.getElementById('q6-dots-layer');if(q6l)q6l.innerHTML='';
+    const ov=document.getElementById('ov-feedback-btn');if(ov)ov.remove();
+    updateUI();
+}
+function devGo(q){
+    devReset();
+    if(q===1)          {showTopUI(true);shuffleQ1();setupQ1();}
+    else if(q===2)     {currentLevel=2;startQ2();}
+    else if(q===3)     {currentLevel=3;startQ3Ov();}
+    else if(q===4)     {currentLevel=4;showTopUI(false);startQ4();}
+    else if(q===4.5)   {currentLevel=4;showTopUI(false);startQ45();}
+    else if(q===5)     {currentLevel=5;hasWeapon=true;showTopUI(false);startQ5();}
+    else if(q===5.5)   {currentLevel=5;hasWeapon=true;showTopUI(false);startQ55();}
+    else if(q===6)     {currentLevel=6;hasWeapon=true;showTopUI(false);startQ6();}
+    else if(q===7)     {currentLevel=7;hasWeapon=true;showTopUI(false);startQ7();}
+    else if(q==='fb')  {showFeedback();}
+    // ── 결과 화면 바로가기 ──
+    else if(q==='q1no')  {currentLevel=1;showTopUI(true);failQ1HP();}
+    else if(q==='q1ok')  {currentLevel=1;showTopUI(true);finishQ1();}
+    else if(q==='q2no')  {currentLevel=2;showTopUI(false);
+                          cleanDots();ctx('graph-layer').clearRect(0,0,1000,750);
+                          showOv('assets/b2.png','몬스터의 성으로 가는 길을 찾지 못해\n모험을 이어가지 못합니다...\n여기까지의 결과를 확인해보세요.',()=>showFeedback());}
+    else if(q==='q3no')  {currentLevel=3;showTopUI(false);
+                          el('q3-overlay').style.display='none';
+                          showOv('assets/m_secret1.png','비밀번호를 풀지 못해\n마법의 숲으로 들어갈 수 없습니다...\n여기까지의 결과를 확인해보세요.',()=>showFeedback());}
+    else if(q==='q2ok')  {currentLevel=2;showTopUI(false);finishQ2();}
+    else if(q==='q3ok')  {currentLevel=3;showTopUI(false);finishQ3Ov();}
+    else if(q==='q4no')  {currentLevel=4;showTopUI(false);el('q4-overlay').style.display='block';failQ4();}
+    else if(q==='q4ok')  {currentLevel=4;showTopUI(false);el('q4-overlay').style.display='block';finishQ4();}
+    else if(q==='q4.5ok'){currentLevel=4;showTopUI(false);el('q45-overlay').style.display='block';hasWeapon=true;finishQ45();}
+    else if(q==='q4.5no'){currentLevel=4;showTopUI(false);el('q45-overlay').style.display='block';failQ45();}
+    else if(q==='q5ok')  {currentLevel=5;hasWeapon=true;showTopUI(false);el('q5-overlay').style.display='block';finishQ5();}
+    else if(q==='q5no')  {currentLevel=5;hasWeapon=true;showTopUI(false);el('q5-overlay').style.display='block';failQ5();}
+    else if(q==='q5.5no'){currentLevel=5;hasWeapon=true;showTopUI(false);
+                          el('q55-overlay').style.display='none';
+                          showOv('assets/mk_fail3.png','체력이 부족하여 문을 열지 못했습니다...',()=>showFeedback());}
+    else if(q==='q5.5ok'){currentLevel=5;hasWeapon=true;showTopUI(false);el('q55-overlay').style.display='block';
+                          submitQ55._devSkip=true;pHP=100;
+                          showOv('assets/lockeddoor.png','🔓 딸깍! 문이 열렸습니다! 안으로 들어간다...',()=>startQ6());}
+    else if(q==='q6ok')  {currentLevel=6;hasWeapon=true;showTopUI(false);el('q6-overlay').style.display='block';finishQ6();}
+    else if(q==='q6no')  {currentLevel=6;hasWeapon=true;showTopUI(false);el('q6-overlay').style.display='block';failQ6();}
+    else if(q==='q7ok')  {currentLevel=7;hasWeapon=true;showTopUI(false);el('q7-overlay').style.display='block';
+                          q7LastTwo=[true,true];finishQ7();}
+    else if(q==='q7no')  {currentLevel=7;hasWeapon=true;showTopUI(false);el('q7-overlay').style.display='block';failQ7();}
+    else if(q==='end')   {currentLevel=7;hasWeapon=true;
+                          q7LastTwo=[true,true];
+                          showOv('assets/mk_victory1.png','미노타우루스를 쓰러뜨렸다!\n어둠의 힘이 사라졌다!',()=>{
+                            showOv('assets/success4.png','⚔️ 미노타우루스 몬스터를 물리쳤다!\n용사여, 그대는 진정한 이차함수의 마스터!\n모든 퀘스트를 완료하였습니다! 🏆',()=>{
+                              showOv('assets/ending1.png','용사의 활약으로 마을에 평화가 찾아왔습니다.\n사람들은 서로를 아끼며 화목하게 살아가고,\n왕국 곳곳에 웃음꽃이 피어났습니다. 🌸\n\n수고했어요! 이차함수 완전 정복! 🎉',()=>showFeedback(),false,'🎉 피드백 보기');
+                            });
+                          });}
+}
+
+/* ================================================================
+   재시작 (오프닝 없이 Q1으로)
+================================================================ */
+function restartFromQ1(){
+    // 상태 초기화
+    pHP=100; currentLevel=1; currentQuest=1; qCount=1;
+    isPerfect=true; correctCount=0;
+    q1IntroShown=false; hasSeenFeedback=false; gold=0; gd.q1={c:0,w:0}; gd.q2={c:0,w:0}; gd.q3={c:0,w:0}; gd.q4={c:0,w:0}; gd.q45={c:0,w:0}; gd.q5={c:0,w:0}; gd.q6={c:0,w:0}; gd.q7={c:0,w:0};
+    hasWeapon=false;
+    // 화면 초기화
+    el('feedback-screen').style.display='none';
+    el('q3-overlay').style.display='none';
+    el('full-overlay').style.display='none';
+    el('overlay-msg').style.display='none';
+    el('knight').style.display='block';
+    el('target').style.display='block';
+    updateUI();
+    showTopUI(true);
+    shuffleQ1();
+    setupQ1();
+}
+
+/* ================================================================
+   시작
+================================================================ */
+/* ===== 미니게임 ===== */
+function _reset(){
+    pHP=100;gold=0;isPerfect=true;correctCount=0;
+    hasWeapon=false;hasSeenFeedback=false;
+    if(typeof passedQuests!=='undefined')passedQuests=[];
+    q4Problems=[];q4Idx=0;q5Problems=[];q5Idx=0;
+    Object.keys(gd).forEach(function(k){
+        if(gd[k]&&typeof gd[k]==='object'){gd[k].c=0;gd[k].w=0;}
+    });
+    updateUI();showTopUI(false);
+}
+function _showSel(){document.getElementById('sel').style.display='flex';}
+function _hideSel(){document.getElementById('sel').style.display='none';}
+
+function startMini(){
+    _hideSel();_reset();
+    currentLevel=4;startQ4();
+}
+function devQ5(){
+    _hideSel();_reset();
+    hasWeapon=true;currentLevel=5;startQ5();
+}
+
+/* Q4 완료 -> Q5 */
+finishQ4=function(){
+    disableQ4Drag();
+    el('q4-overlay').style.display='none';
+    if(gd.q4&&gd.q4.w===0)addGold(100);
+    showOv('assets/success.png',
+        '바위를 모두 굴렸습니다!\n길이 열렸습니다!'+(gd.q4&&gd.q4.w===0?' 퍼펙트! +100G':''),
+        function(){hasWeapon=true;currentLevel=5;startQ5();}
+    );
+};
+
+/* Q5 완료 -> 피드백 */
+finishQ5=function(){
+    el('q5-overlay').style.display='none';
+    if(gd.q5&&gd.q5.w===0)addGold(100);
+    showOvFB('assets/success3.png',
+        '슬라임 몳스터를 물리쳤습니다!'+(gd.q5&&gd.q5.w===0?' 퍼펙트! +100G':''),
+        function(){showFeedback();}
+    );
+};
+
+/* Q5 실패 -> 피드백 */
+failQ5=function(){
+    el('q5-overlay').style.display='none';
+    showOv('assets/bg.png',
+        '슬라임 몳스터에게 쓰러졌습니다...\n여기까지의 결과를 확인하세요.',
+        function(){showFeedback();}
+    );
+};
+
+/* 다시 풀기 */
+function restartFromQ1(){
+    el('feedback-screen').style.display='none';
+    el('full-overlay').style.display='none';
+    el('overlay-msg').style.display='none';
+    var s=document.getElementById('ov-start-btn');if(s)s.remove();
+    ['q4-overlay','q5-overlay'].forEach(function(id){
+        var e=document.getElementById(id);if(e)e.style.display='none';
+    });
+    _reset();
+    _showSel();
+}
+
+/* 초기화 */
+(function(){
+    ['team-screen','team-hud','opening-screen','q3-overlay',
+     'q4-overlay','q45-overlay','q5-overlay','q55-overlay',
+     'q6-overlay','q7-overlay','full-overlay','overlay-msg',
+     'feedback-screen','top-ui','bottom-panel',
+     'numpad-overlay','memo-pad','memo-toggle-btn'
+    ].forEach(function(id){var e=document.getElementById(id);if(e)e.style.display='none';});
+    updateUI();
+    _showSel();
+})();
+
+</script>
+
+<script>
+(function scaleGame(){
+    function fit(){
+        var gc = document.getElementById('game-container');
+        if(!gc) return;
+
+        var vp = window.visualViewport;
+        var W = vp ? vp.width  : window.innerWidth;
+        var H = vp ? vp.height : window.innerHeight;
+
+        var gameW = 1008; // 1000 + border 4px*2
+        var gameH = 758;  // 750 + border 4px*2
+
+        // 화면 여백 없이 꽉 채우되, 비율 유지
+        var scale = Math.min(W / gameW, H / gameH);
+        // 최소 scale 보장 (너무 작아지지 않게)
+        scale = Math.max(scale, 0.25);
+
+        gc.style.transformOrigin = 'top left';
+        gc.style.transform = 'scale(' + scale + ')';
+
+        var scaledW = gameW * scale;
+        var scaledH = gameH * scale;
+
+        // 중앙 정렬
+        var ml = Math.max(0, (W - scaledW) / 2);
+        var mt = Math.max(0, (H - scaledH) / 2);
+        gc.style.marginLeft   = ml + 'px';
+        gc.style.marginTop    = mt + 'px';
+        gc.style.marginRight  = '0';
+        gc.style.marginBottom = '0';
+
+        // body overflow 방지
+        document.body.style.width    = W + 'px';
+        document.body.style.height   = H + 'px';
+        document.body.style.overflow = 'hidden';
+    }
+
+    window.addEventListener('resize', fit);
+    window.addEventListener('orientationchange', function(){ setTimeout(fit, 300); });
+    if(window.visualViewport){
+        window.visualViewport.addEventListener('resize', fit);
+        window.visualViewport.addEventListener('scroll', fit);
+    }
+    document.addEventListener('DOMContentLoaded', fit);
+    if(document.readyState !== 'loading') fit();
+})();
+</script>
+</script>
+</body>
+</html>
