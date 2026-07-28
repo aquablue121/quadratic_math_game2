@@ -1,0 +1,1201 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>이차함수 마스터 — 실시간 대시보드</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0a0614;color:#e0e0e0;font-family:'Malgun Gothic',sans-serif;padding:14px;min-height:100vh}
+h1{font-size:20px;font-weight:bold;color:#f1c40f;text-align:center;margin-bottom:6px}
+.live-bar{display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:12px;font-size:13px}
+.live-dot{width:8px;height:8px;border-radius:50%;background:#2ecc71;animation:pulse 1.2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+.sum-card{background:rgba(255,255,255,0.07);border:1px solid rgba(155,89,182,0.3);border-radius:10px;padding:10px;text-align:center}
+.sum-label{font-size:11px;color:#9b59b6;margin-bottom:4px}
+.sum-val{font-size:24px;font-weight:bold;color:#f1c40f}
+.main-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.panel{background:rgba(255,255,255,0.05);border:1px solid rgba(155,89,182,0.2);border-radius:10px;padding:12px;margin-bottom:10px}
+.panel:last-child{margin-bottom:0}
+.panel-title{font-size:13px;font-weight:bold;color:#c39bd3;margin-bottom:10px}
+.rank-row{display:flex;align-items:center;gap:8px;padding:6px 2px;border-bottom:1px solid rgba(255,255,255,0.06)}
+.rank-row:last-child{border-bottom:none}
+.rank-num{font-size:16px;min-width:28px;text-align:center}
+.rank-name{flex:1;font-size:14px;font-weight:bold}
+.quest-dots{display:flex;gap:2px}
+.qdot{width:12px;height:12px;border-radius:50%;border:1.5px solid rgba(255,255,255,0.1)}
+.qd-done{background:#27ae60;border-color:#2ecc71}
+.qd-curr{background:#f39c12;border-color:#f1c40f;animation:pulse 1s infinite}
+.qd-no{background:rgba(255,255,255,0.07)}
+.gold-num{font-size:13px;color:#f1c40f;font-weight:bold;min-width:56px;text-align:right}
+.qmap-row{display:flex;align-items:center;gap:3px;margin-bottom:3px}
+.qmap-name{font-size:11px;color:#aaa;min-width:48px;text-align:right}
+.qcell{width:20px;height:20px;border-radius:3px;font-size:9px;display:flex;align-items:center;justify-content:center}
+.qc-done{background:rgba(39,174,96,0.35);color:#2ecc71}
+.qc-curr{background:rgba(243,156,18,0.4);color:#f1c40f}
+.qc-no{background:rgba(255,255,255,0.05);color:#444}
+.bar-row{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.bar-lbl{font-size:11px;color:#aaa;min-width:72px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar-track{flex:1;height:12px;background:rgba(255,255,255,0.07);border-radius:6px;overflow:hidden}
+.bar-fill{height:100%;border-radius:6px;transition:width .5s}
+.bar-val{font-size:11px;font-weight:bold;min-width:20px;text-align:right}
+.tg-row{display:flex;align-items:center;gap:6px;margin-bottom:5px}
+.tg-name{font-size:11px;color:#aaa;min-width:48px;text-align:right}
+.tg-track{flex:1;height:15px;background:rgba(255,255,255,0.07);border-radius:7px;overflow:hidden}
+.tg-fill{height:100%;border-radius:7px;display:flex;align-items:center;padding-left:5px;font-size:10px;font-weight:bold;color:#000;transition:width .5s;min-width:0}
+
+/* 설정 모달 */
+#setup-modal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.95);z-index:9999;display:flex;align-items:center;justify-content:center}
+.modal-box{background:#12082a;border:2px solid #9b59b6;border-radius:14px;padding:24px 28px;max-width:460px;width:90%}
+.modal-title{font-size:18px;font-weight:bold;color:#f1c40f;margin-bottom:6px}
+.modal-sub{font-size:12px;color:#9b59b6;margin-bottom:16px;line-height:1.6}
+.fi{display:block;font-size:12px;color:#c39bd3;margin-top:10px;margin-bottom:3px}
+.finput{width:100%;font-size:12px;padding:7px 10px;border-radius:7px;border:1.5px solid #9b59b6;background:#0a0614;color:#fff}
+.fbtn{width:100%;margin-top:14px;padding:10px;font-size:15px;font-weight:bold;cursor:pointer;border-radius:9px;border:2px solid #f1c40f;background:#2d1a4e;color:#fff}
+.fskip{display:block;text-align:center;margin-top:10px;font-size:12px;color:#666;cursor:pointer;text-decoration:underline}
+.ferr{color:#e74c3c;font-size:12px;min-height:14px;margin-top:4px}
+
+/* 데모 */
+.demo-bar{background:rgba(243,156,18,0.12);border:1px solid rgba(243,156,18,0.3);border-radius:7px;padding:5px 10px;font-size:12px;color:#f39c12;text-align:center;margin-bottom:10px}
+.demo-btns{display:flex;gap:6px;justify-content:center;margin-bottom:10px}
+.demo-btns button{padding:5px 14px;font-size:12px;cursor:pointer;border-radius:7px;border:1px solid #9b59b6;background:#2d1a4e;color:#c39bd3}
+.update-time{font-size:10px;color:#444;text-align:right;margin-top:8px}
+
+        .admin-bar{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+        .admin-btn{font-size:12px;padding:4px 12px;border-radius:6px;cursor:pointer;border:1px solid #e74c3c;background:rgba(231,76,60,0.15);color:#e74c3c;font-weight:bold}
+        .admin-btn:hover{background:rgba(231,76,60,0.3)}
+        .del-btn{font-size:11px;padding:2px 7px;border-radius:4px;cursor:pointer;border:1px solid #e74c3c;background:transparent;color:#e74c3c;margin-left:4px;opacity:0.7}
+        .del-btn:hover{opacity:1;background:rgba(231,76,60,0.2)}
+        #admin-pw-modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:9998;align-items:center;justify-content:center}
+        .pw-box{background:#12082a;border:2px solid #e74c3c;border-radius:12px;padding:22px 28px;text-align:center;min-width:260px}
+        .pw-title{font-size:16px;font-weight:bold;color:#e74c3c;margin-bottom:12px}
+        .pw-input{width:100%;font-size:15px;padding:8px 10px;border-radius:7px;border:1.5px solid #e74c3c;background:#0a0614;color:#fff;text-align:center;margin-bottom:8px}
+        .pw-btn{width:100%;padding:9px;font-size:14px;font-weight:bold;cursor:pointer;border-radius:8px;border:2px solid #e74c3c;background:#2a0808;color:#fff}
+        .pw-err{color:#e74c3c;font-size:12px;min-height:14px}
+        /* 관리자 탭 */
+        .adm-tab-bar{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;}
+        .adm-tab{font-size:12px;padding:5px 14px;border-radius:6px;cursor:pointer;border:1px solid #9b59b6;background:rgba(155,89,182,0.1);color:#c39bd3;font-weight:bold;}
+        .adm-tab.active{background:rgba(155,89,182,0.4);color:#fff;border-color:#c39bd3;}
+        /* 설문 분석 패널 */
+        .sv-stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;}
+        .sv-stat-card{background:rgba(255,255,255,0.06);border:1px solid rgba(155,89,182,0.25);border-radius:8px;padding:10px;text-align:center;}
+        .sv-stat-label{font-size:10px;color:#9b59b6;margin-bottom:3px;}
+        .sv-stat-val{font-size:22px;font-weight:bold;color:#f1c40f;}
+        .sv-bar-row{display:flex;align-items:center;gap:6px;margin-bottom:6px;}
+        .sv-bar-lbl{font-size:11px;color:#aaa;min-width:160px;line-height:1.3;}
+        .sv-bar-track{flex:1;height:12px;background:rgba(255,255,255,0.07);border-radius:6px;overflow:hidden;}
+        .sv-bar-fill{height:100%;border-radius:6px;transition:width .5s;}
+        .sv-bar-val{font-size:11px;font-weight:bold;min-width:28px;text-align:right;color:#f1c40f;}
+        .sv-comment-box{background:rgba(255,255,255,0.04);border:1px solid rgba(155,89,182,0.2);border-radius:7px;padding:8px 10px;margin-bottom:6px;font-size:12px;color:#ccc;line-height:1.6;}
+        .sv-comment-meta{font-size:10px;color:#666;margin-bottom:3px;}
+        .sv-export-btn{font-size:12px;padding:5px 14px;border-radius:6px;cursor:pointer;border:1px solid #2ecc71;background:rgba(46,204,113,0.1);color:#2ecc71;font-weight:bold;}
+</style>
+</head>
+<body>
+
+<!-- 설정 모달 -->
+
+<!-- 학급 코드 비밀번호 모달 (학생 개인정보 보호용) -->
+<div id="class-pw-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:9998;align-items:center;justify-content:center">
+  <div class="pw-box">
+    <div class="pw-title" id="class-pw-title">🔐 학급 비밀번호</div>
+    <div id="class-pw-desc" style="font-size:11px;color:#aaa;margin-bottom:10px;line-height:1.6;text-align:left;"></div>
+    <input class="pw-input" id="class-pw-input" type="password" placeholder="비밀번호 입력" onkeydown="if(event.key==='Enter')submitClassPw()">
+    <input class="pw-input" id="class-pw-confirm" type="password" placeholder="비밀번호 확인" style="display:none" onkeydown="if(event.key==='Enter')submitClassPw()">
+    <div class="pw-err" id="class-pw-err"></div>
+    <button class="pw-btn" onclick="submitClassPw()" style="margin-top:8px">확인</button>
+    <button class="pw-btn" onclick="cancelClassPw()" style="margin-top:6px;border-color:#555;background:#1a1a2e;color:#aaa">취소</button>
+  </div>
+</div>
+
+<div id="setup-modal">
+  <div class="modal-box">
+    <div class="modal-title">🔥 Firebase 연동 설정</div>
+    <div class="modal-sub">game_team.html과 같은 Firebase 설정값을 입력하세요.<br>QR코드로 학생 접속 URL도 생성됩니다.</div>
+    <span class="fi">API Key</span>
+    <input class="finput" id="f-api" value="AIzaSyA_H5vl2qe1ZAUWxUvmzKJvApFu2IuKqg8">
+    <span class="fi">Database URL</span>
+    <input class="finput" id="f-db" value="https://quadratic-rpg-64c97-default-rtdb.asia-southeast1.firebasedatabase.app">
+    <span class="fi">Project ID</span>
+    <input class="finput" id="f-proj" value="quadratic-rpg-64c97">
+    <span class="fi">App ID</span>
+    <input class="finput" id="f-app" value="1:608854617731:web:01be903c5504b060c3b5b6">
+    <span class="fi">학급 코드 <span style="color:#666;font-size:10px;">(필수) 예: 2025_1반 — 해당 학급 데이터만 표시되며, 비밀번호로 보호됩니다</span></span>
+    <input class="finput" id="f-class" placeholder="학급 코드를 입력하세요">
+    <div class="ferr" id="ferr"></div>
+    <button class="fbtn" onclick="connectFB()">🚀 연결 시작</button>
+    <span class="fskip" onclick="openMasterView()" style="display:block;margin-top:4px;">🔐 교사 마스터 비밀번호로 전체 학급 통합 보기 (읽기 전용 — 잘못 입력된 학급코드 찾기용)</span>
+    <span class="fskip" onclick="startDemo()">Firebase 없이 데모 모드로 보기</span>
+  </div>
+</div>
+
+<!-- 헤더 -->
+<h1>⚔ 이차함수 마스터 — 실시간 클래스 현황</h1>
+<div id="class-badge" style="display:none;text-align:center;margin-bottom:6px;">
+  <span style="font-size:12px;background:rgba(155,89,182,0.2);border:1px solid #9b59b6;border-radius:12px;padding:3px 14px;color:#c39bd3;">📚 학급: <strong id="class-badge-name"></strong></span>
+</div>
+<div class="live-bar">
+  <span class="live-dot"></span>
+  <span id="live-status">대기 중...</span>
+  <span style="color:#444;font-size:11px" id="update-time"></span>
+</div>
+
+<div class="admin-bar" id="admin-bar" style="display:none">
+  <span style="font-size:12px;color:#e74c3c;font-weight:bold;">🔐 관리자 모드</span>
+  <button class="admin-btn" id="btn-session-toggle" onclick="toggleSessionEnd()">🛑 게임 종료 (걸린시간 정지)</button>
+  <button class="admin-btn" onclick="deleteAllTeams()">🗑 전체 모둠 초기화</button>
+  <button class="admin-btn" onclick="lockAdmin()" style="border-color:#555;color:#aaa">🔒 관리자 모드 종료</button>
+</div>
+<div id="session-end-banner" style="display:none;background:rgba(231,76,60,0.15);border:1px solid rgba(231,76,60,0.4);border-radius:7px;padding:5px 10px;font-size:12px;color:#e74c3c;text-align:center;margin-bottom:10px;"></div>
+<!-- 관리자 탭 바 -->
+<div id="admin-tab-bar" class="adm-tab-bar" style="display:none;">
+  <button class="adm-tab active" id="tab-game" onclick="switchAdmTab('game')">🎮 게임 결과</button>
+  <button class="adm-tab" id="tab-student" onclick="switchAdmTab('student')">👤 학생별 결과</button>
+  <button class="adm-tab" id="tab-survey" onclick="switchAdmTab('survey')">📋 설문 분석</button>
+  <select id="adm-class-filter" onchange="applyClassFilter()"
+    style="font-size:11px;padding:2px 6px;border-radius:5px;margin-left:auto;
+    border:1px solid #9b59b6;background:#1a0a2e;color:#fff;">
+    <option value="">전체 학급</option>
+  </select>
+  <button class="sv-export-btn" onclick="exportSurveyCSV()">⬇ 설문 CSV 다운로드</button>
+</div>
+
+<!-- 학생별 결과 패널 -->
+<div id="student-panel" style="display:none;margin-bottom:10px;">
+  <div class="panel">
+    <div class="panel-title">📊 학생별 진행 상황 한눈에 보기</div>
+    <div style="font-size:11px;color:#666;margin-bottom:8px;">
+      진행률이 낮으면서 같은 문항에서 틀린 문제 개수가 4개 이상인 학생이 맨 위에, 그 다음은 틀린 문제 개수가 4개 이상인 학생, 그 다음은 진행률이 낮은 학생 순으로 표시됩니다. 막대는 현재 도달한 퀘스트, 아래 칸의 ❌ 뒤 숫자는 해당 문항에서 틀린 문제 개수입니다 (색이 진할수록 많이 틀림, — 는 아직 도달하지 않은 문항).
+    </div>
+    <div id="student-overview"><span style="color:#555;font-size:13px;">학생 데이터가 없습니다.</span></div>
+  </div>
+  <div class="panel">
+    <div class="panel-title">👤 학생별 상세 결과</div>
+    <div style="font-size:11px;color:#666;margin-bottom:8px;">
+      걸린 시간: 입장~Q7 통과 시각 기준 (진행 중인 학생은 입장~현재 기준) · 정답률: 퀘스트별 정답수/(정답+오답)
+    </div>
+    <div id="student-detail" style="overflow-x:auto;"></div>
+    <div class="panel" style="margin-top:12px;">
+      <div class="panel-title">⚠️ 도움 필요 학생 실시간 감지</div>
+      <div style="font-size:11px;color:#666;margin-bottom:6px;">같은 문항에서 틀린 문제 개수가 4개 이상이거나 진행률이 학급 중앙값보다 낮은 학생</div>
+      <div id="struggling-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 설문 분석 패널 -->
+<div id="survey-panel" style="display:none;margin-bottom:10px;">
+  <div class="panel">
+    <div class="panel-title">📋 설문 응답 현황</div>
+    <div class="sv-stat-grid" id="sv-summary"></div>
+  </div>
+  <div class="panel">
+    <div class="panel-title">📊 문항별 평균 점수</div>
+    <div id="sv-bars"></div>
+  </div>
+  <div class="panel">
+    <div class="panel-title" style="margin-bottom:8px;">💬 학생 자유 서술</div>
+    <div id="sv-comments"><span style="color:#555;font-size:13px;">아직 응답 없음</span></div>
+  </div>
+  <div class="panel">
+    <div class="panel-title">👤 학생별 상세 결과</div>
+    <div id="sv-detail" style="overflow-x:auto;"></div>
+  </div>
+</div>
+<div style="text-align:right;margin-bottom:6px">
+  <button onclick="openAdminMode()" style="font-size:11px;padding:3px 10px;border-radius:5px;cursor:pointer;border:1px solid #555;background:transparent;color:#555">관리자</button>
+</div>
+<div id="demo-bar" class="demo-bar" style="display:none">📊 데모 모드 실행 중</div>
+<div id="demo-btns" class="demo-btns" style="display:none">
+  <button onclick="simTick()">▶ 랜덤 진행 시뮬</button>
+  <button onclick="resetDemo()">↺ 초기화</button>
+  <button onclick="document.getElementById('setup-modal').style.display='flex'">Firebase 연결</button>
+</div>
+
+<!-- 요약 -->
+<div class="summary-grid">
+  <div class="sum-card"><div class="sum-label">참여 모둠</div><div class="sum-val" id="s-teams">0</div></div>
+  <div class="sum-card"><div class="sum-label">평균 퀘스트</div><div class="sum-val" id="s-quest">—</div></div>
+  <div class="sum-card"><div class="sum-label">총 정답 수</div><div class="sum-val" id="s-correct">0</div></div>
+  <div class="sum-card"><div class="sum-label">평균 골드 🪙</div><div class="sum-val" id="s-gold">0</div></div>
+</div>
+
+<div class="main-grid">
+  <!-- 왼쪽 -->
+  <div>
+    <div class="panel">
+      <div class="panel-title">🏆 모둠 순위 (골드 기준) <span style="font-size:10px;color:#666;font-weight:normal;">— 가장 빠른 학생 및 전원 통과 퀘스트 포함 (관리자 모드에서는 숨김)</span></div>
+      <div id="leaderboard"><span style="color:#555;font-size:13px">모둠 입장을 기다리는 중...</span></div>
+      <div style="display:flex;gap:8px;margin-top:8px;font-size:10px;color:#555">
+        <span>🟢 통과</span><span>🟡 진행 중</span><span>⬛ 미진행</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 오른쪽 -->
+  <div>
+    <div class="panel">
+      <div class="panel-title">❌ 퀘스트별 오답 현황 <span style="font-size:10px;color:#666;font-weight:normal;">(자주 틀리는 유형 순)</span></div>
+      <div id="err-bars"><span style="color:#555;font-size:13px">데이터 없음</span></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">🆘 도움이 필요한 학생</div>
+      <div style="font-size:11px;color:#666;margin-bottom:6px;">같은 문항에서 틀린 문제 개수가 4개 이상이거나 진행률이 학급 중앙값보다 낮은 학생을 실시간으로 보여줍니다.</div>
+      <div id="public-struggling"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const QUESTS=['Q1','Q2','Q3','Q4','Q4.5','Q5','Q5.5','Q6','Q7'];
+const ELABELS=['이차함수 판별','y=ax² 위 점','그래프 짝짓기','평행이동','일반형→표준형','표준형 축·꼭짓점','잠긴 문','일반형 그래프','최종 결전'];
+const TCOLORS=['#f1c40f','#3498db','#2ecc71','#e74c3c','#9b59b6','#1abc9c','#e67e22','#e91e63'];
+
+// wrong/correct 배열은 8칸: Q1,Q2,Q3,Q4,Q4.5,Q5,Q6,Q7 (Q5.5는 잠금 퍼즐이라 정오답 채점이 없음)
+const ERR_LABELS=['Q1','Q2','Q3','Q4','Q4.5','Q5','Q6','Q7'];
+const ERR_DESCS=[ELABELS[0],ELABELS[1],ELABELS[2],ELABELS[3],ELABELS[4],ELABELS[5],ELABELS[7],ELABELS[8]];
+// 학생의 현재 quest 값(1, 2, 4.5, 5.5 등 소수 포함)을 wrong/correct 배열의 정수 인덱스로 변환
+const Q_BREAKS=[1,2,3,4,4.5,5,5.5,6,7];
+const Q_IDX_MAP=[0,1,2,3,4,5,5,6,7];
+function questToIdx(q){
+    q=q||1;
+    for(let i=Q_BREAKS.length-1;i>=0;i--){ if(q>=Q_BREAKS[i]) return Q_IDX_MAP[i]; }
+    return 0;
+}
+function questDesc(q){ return ERR_DESCS[questToIdx(q)]||''; }
+
+const QUEST_FULL=['Q1 이차함수 판별','Q2 y=ax² 위 점','Q3 그래프 짝짓기','Q4 평행이동',
+    'Q4.5 일반형→표준형','Q5 표준형 축·꼭짓점','Q5.5 잠긴 문','Q6 일반형 그래프','Q7 최종 결전'];
+const REPEAT_WRONG_THRESHOLD=4; // 같은 문항에서 틀린 문제 개수가 이 값 이상이면 우선순위를 올림
+
+// 학생별 "진행률(pos)" · "현재 문항에서 틀린 문제 개수" · "낮은 진행률 여부"를 계산.
+// lowProgress는 학급 진행률의 중앙값보다 뒤처진 경우로 판단한다 (상대적 기준).
+// "학생별 진행 상황 한눈에 보기"와 "도움 필요 학생 실시간 감지"가 동일한 기준을 공유한다.
+function computeStudentPriority(students){
+    const TOTAL=QUEST_FULL.length;
+    const withStats=students.map(s=>{
+        let pos=Q_BREAKS.findIndex(b=>b>=s.quest);
+        if(pos<0) pos=TOTAL-1;
+        const qIdx=questToIdx(s.quest);
+        const wrongOnCurrent=s.wrongArr[qIdx]||0;
+        return {s, pos, wrongOnCurrent, repeat:wrongOnCurrent>=REPEAT_WRONG_THRESHOLD};
+    });
+    const posSorted=[...withStats.map(w=>w.pos)].sort((a,b)=>a-b);
+    const medianPos=posSorted.length ? posSorted[Math.floor((posSorted.length-1)/2)] : 0;
+    return withStats.map(w=>({...w, lowProgress: w.pos<medianPos}));
+}
+
+// 정렬 기준: 1) 틀린 문제 개수 많음+낮은진행률 → 2) 틀린 문제 개수 많음 → 3) 나머지는 진행률 낮은 순
+function priorityCompare(a,b){
+    if(a.repeat!==b.repeat) return a.repeat?-1:1;
+    if(a.pos!==b.pos) return a.pos-b.pos;
+    if(b.wrongOnCurrent!==a.wrongOnCurrent) return b.wrongOnCurrent-a.wrongOnCurrent;
+    if(a.s.team!==b.s.team) return a.s.team.localeCompare(b.s.team,'ko');
+    return (b.s.gold||0)-(a.s.gold||0);
+}
+
+// 특정 quest 값 기준으로 진행도 점(●) 목록을 그려준다. (리더보드의 빠른/느린 학생 표시에 공용으로 사용)
+function questDotsHtml(q){
+    return QUESTS.map((_,qi)=>{
+        if(qi<q-1) return '<div class="qdot qd-done"></div>';
+        if(qi===q-1) return '<div class="qdot qd-curr"></div>';
+        return '<div class="qdot qd-no"></div>';
+    }).join('');
+}
+let teamsData={};
+let studentsData=[];
+let classCode=""; // 학급 코드 (빈 문자열 = 전체)
+let isAllMode=false; // 마스터 비밀번호로 전체 학급 통합 보기 중인지 여부 (읽기 전용)
+let sessionEndTime=null; // 교사가 "게임 종료"를 누른 시각. 설정되면 걸린시간 계산이 이 시각에서 멈춘다.
+
+/* Firebase 연결 */
+function connectFB(){
+  const api=document.getElementById('f-api').value.trim();
+  const db=document.getElementById('f-db').value.trim();
+  const proj=document.getElementById('f-proj').value.trim();
+  const app=document.getElementById('f-app').value.trim();
+  if(!api||!db||!proj||!app){document.getElementById('ferr').innerText='모든 항목을 입력하세요.';return;}
+  classCode=(document.getElementById('f-class').value||'').trim();
+  if(!classCode){document.getElementById('ferr').innerText='학생 정보 보호를 위해 학급 코드를 입력해야 합니다.';return;}
+  try{
+    const fdb=initFirebase(api,db,proj,app);
+    document.getElementById('ferr').innerText='';
+
+    // 학생 개인정보 보호를 위해 비밀번호 확인/설정을 먼저 거친 뒤 데이터를 불러온다.
+    fdb.ref(`classes/${classCode}/meta/dashboardPw`).once('value').then(snap=>{
+      const savedPw=snap.val();
+      openClassPwModal(savedPw?'enter':'set', fdb, savedPw, classCode, `classes/${classCode}/meta/dashboardPw`, ()=>{
+        finishConnect(fdb);
+      }, ()=>{
+        document.getElementById('setup-modal').style.display='flex';
+      });
+    }).catch(e=>{
+      document.getElementById('ferr').innerText='학급 코드 확인 실패: '+e.message;
+    });
+  }catch(e){document.getElementById('ferr').innerText='연결 실패: '+e.message;}
+}
+
+/* 교사 마스터 비밀번호로 모든 학급을 한 화면에 통합해서 보기 (읽기 전용).
+   학급 코드를 잘못 입력해서 엉뚱한 코드로 접속한 학생을 찾을 때 등에 사용. */
+function openMasterView(){
+  const api=document.getElementById('f-api').value.trim();
+  const db=document.getElementById('f-db').value.trim();
+  const proj=document.getElementById('f-proj').value.trim();
+  const app=document.getElementById('f-app').value.trim();
+  if(!api||!db||!proj||!app){document.getElementById('ferr').innerText='모든 항목을 입력하세요.';return;}
+  try{
+    const fdb=initFirebase(api,db,proj,app);
+    document.getElementById('ferr').innerText='';
+    fdb.ref('meta/masterDashboardPw').once('value').then(snap=>{
+      const savedPw=snap.val();
+      openClassPwModal(savedPw?'enter':'set', fdb, savedPw, '전체 학급 통합 보기', 'meta/masterDashboardPw', ()=>{
+        finishConnectAll(fdb);
+      }, ()=>{
+        document.getElementById('setup-modal').style.display='flex';
+      });
+    }).catch(e=>{
+      document.getElementById('ferr').innerText='마스터 비밀번호 확인 실패: '+e.message;
+    });
+  }catch(e){document.getElementById('ferr').innerText='연결 실패: '+e.message;}
+}
+
+function initFirebase(api,db,proj,app){
+    if(firebase.apps.length>0) return firebase.apps[0].database();
+    firebase.initializeApp({apiKey:api,authDomain:proj+'.firebaseapp.com',
+        databaseURL:db,projectId:proj,storageBucket:proj+'.appspot.com',appId:app});
+    return firebase.database();
+}
+
+/* 비밀번호 모달 제어 (최초 연결/관리자 학급 전환/마스터 통합 보기에서 공용으로 사용) */
+let classPwFdb=null;
+let classPwMode=null; // 'set' | 'enter'
+let classPwSavedValue=null;
+let classPwPath=null; // 비밀번호가 저장/확인될 Firebase 경로
+let classPwOnSuccess=null;
+let classPwOnCancel=null;
+
+function openClassPwModal(mode, fdb, savedPw, label, pwPath, onSuccess, onCancel){
+    classPwMode=mode;
+    classPwFdb=fdb;
+    classPwSavedValue=savedPw||null;
+    classPwPath=pwPath;
+    classPwOnSuccess=onSuccess;
+    classPwOnCancel=onCancel;
+    document.getElementById('class-pw-input').value='';
+    document.getElementById('class-pw-confirm').value='';
+    document.getElementById('class-pw-err').innerText='';
+    if(mode==='set'){
+        document.getElementById('class-pw-title').innerText='🔐 비밀번호 설정';
+        document.getElementById('class-pw-desc').innerText=`"${label}"을(를) 처음 사용합니다. 학생 개인정보 보호를 위해 전용 비밀번호를 설정하세요. (다음부터 필요합니다)`;
+        document.getElementById('class-pw-confirm').style.display='block';
+    } else {
+        document.getElementById('class-pw-title').innerText='🔐 비밀번호 확인';
+        document.getElementById('class-pw-desc').innerText=`"${label}"은(는) 이미 비밀번호가 설정되어 있습니다. 비밀번호를 입력하세요.`;
+        document.getElementById('class-pw-confirm').style.display='none';
+    }
+    document.getElementById('setup-modal').style.display='none';
+    document.getElementById('class-pw-modal').style.display='flex';
+    setTimeout(()=>document.getElementById('class-pw-input').focus(),100);
+}
+function cancelClassPw(){
+    document.getElementById('class-pw-modal').style.display='none';
+    if(classPwOnCancel) classPwOnCancel();
+}
+function submitClassPw(){
+    const pw=document.getElementById('class-pw-input').value;
+    if(classPwMode==='set'){
+        const confirmPw=document.getElementById('class-pw-confirm').value;
+        if(!pw||pw.length<4){document.getElementById('class-pw-err').innerText='비밀번호는 4자 이상 입력하세요.';return;}
+        if(pw!==confirmPw){document.getElementById('class-pw-err').innerText='비밀번호가 일치하지 않습니다.';return;}
+        classPwFdb.ref(classPwPath).set(pw).then(()=>{
+            document.getElementById('class-pw-modal').style.display='none';
+            if(classPwOnSuccess) classPwOnSuccess();
+        }).catch(e=>{document.getElementById('class-pw-err').innerText='저장 실패: '+e.message;});
+    } else {
+        if(pw!==classPwSavedValue){
+            document.getElementById('class-pw-err').innerText='비밀번호가 틀렸습니다.';
+            return;
+        }
+        document.getElementById('class-pw-modal').style.display='none';
+        if(classPwOnSuccess) classPwOnSuccess();
+    }
+}
+
+/* 비밀번호 확인(또는 학급코드 미입력)이 끝난 뒤 실제 데이터 로딩을 시작 */
+function finishConnect(fdb){
+  try{
+    document.getElementById('setup-modal').style.display='none';
+    document.getElementById('live-status').innerText='🔴 Firebase 연결됨 — 실시간 동기화 중';
+    isAllMode=false;
+    const badge=document.getElementById('class-badge');
+    const badgeName=document.getElementById('class-badge-name');
+    if(badge&&badgeName){badge.style.display='block'; badgeName.innerText=classCode;}
+
+    // 학급코드 있으면 해당 학급만, 없으면 전체 teams/ 감지
+    const teamsPath=classCode?`classes/${classCode}/teams`:'teams';
+    window._fdb=fdb;
+    window._teamsPath=teamsPath;
+
+    // 실제 서버 연결 여부 진단
+    fdb.ref('.info/connected').on('value',snap=>{
+      if(snap.val()===false){
+        console.warn('Firebase 서버에 연결되지 않았습니다. databaseURL/네트워크를 확인하세요.');
+      }
+    });
+
+    // 학급 목록 자동 수집 (필터용)
+    fdb.ref('classes').on('value',snap=>{
+      const cls=snap.val()||{};
+      updateClassFilterOptions(Object.keys(cls));
+    }, fbErr=>{
+      console.error('classes 리스너 오류:', fbErr);
+      document.getElementById('ferr').innerText='⚠ classes 읽기 실패: '+fbErr.message+' (규칙에서 read 권한을 확인하세요)';
+      document.getElementById('setup-modal').style.display='flex';
+    });
+
+    fdb.ref(teamsPath).on('value',snap=>{
+      const raw=snap.val()||{};
+      teamsData={};
+      studentsData=[];
+      Object.entries(raw).forEach(([code,obj])=>{
+        const mems=Object.values(obj.members||{});
+        if(!mems.length)return;
+        const wrong=Array(8).fill(0);
+        mems.forEach(m=>{if(m.wrong)Object.entries(m.wrong).forEach(([i,v])=>{
+          const idx=+i; if(idx<6)wrong[idx]+=(v||0);
+          else if(idx===7)wrong[6]+=(v||0);
+          else if(idx===8)wrong[7]+=(v||0);
+        });});
+        teamsData[code]={name:code,
+          gold:mems.reduce((s,m)=>s+(m.gold||0),0),
+          quest:Math.min(...mems.map(m=>m.quest||1)), // 모둠원 전체가 통과한(=가장 뒤처진 팀원의) 퀘스트
+          correct:mems.reduce((s,m)=>s+(m.correct||0),0),wrong};
+        mems.forEach(m=>{studentsData.push({
+          name:m.name||'익명',team:code,gold:m.gold||0,
+          quest:m.quest||1,hp:m.hp||0,
+          correctArr:m.correctArr||[],wrongArr:m.wrong||[],
+          startTime:m.startTime||null,finishTime:m.finishTime||null,
+          online:m.online||false
+        });});
+      });
+      render();
+      if(document.getElementById('tab-student')?.classList.contains('active')){
+        renderStudentTab(); renderStruggling();
+      }
+      document.getElementById('update-time').innerText=new Date().toLocaleTimeString('ko-KR');
+    }, fbErr=>{
+      console.error('teams 리스너 오류:', fbErr);
+      document.getElementById('live-status').innerText='🔴 읽기 실패: '+fbErr.message;
+      document.getElementById('ferr').innerText='⚠ 학생 데이터 읽기 실패: '+fbErr.message+' — Realtime Database 규칙(rules)에서 "'+teamsPath+'" 경로의 read 권한을 확인하세요. (테스트 모드는 생성 후 30일이 지나면 자동으로 잠깁니다)';
+      document.getElementById('setup-modal').style.display='flex';
+    });
+    loadSurveyData(fdb, classCode);
+
+    // 이전에 "게임 종료"를 눌러 저장해둔 걸린시간 정지 상태 복원
+    fdb.ref(sessionMetaPath()).once('value').then(snap=>{
+      sessionEndTime=snap.val()||null;
+      updateSessionBanner();
+      render();
+    }).catch(e=>console.error('세션 상태 읽기 실패:', e));
+  }catch(e){document.getElementById('ferr').innerText='연결 실패: '+e.message;document.getElementById('setup-modal').style.display='flex';}
+}
+
+/* 데모 모드 */
+function startDemo(){
+  document.getElementById('setup-modal').style.display='none';
+  document.getElementById('demo-bar').style.display='block';
+  document.getElementById('demo-btns').style.display='flex';
+  document.getElementById('live-status').innerText='📊 데모 모드';
+  teamsData={
+    '1모둠':{name:'1모둠',quest:4,gold:340,correct:28,wrong:[1,2,1,3,2,0,0,0,0]},
+    '2모둠':{name:'2모둠',quest:5,gold:410,correct:33,wrong:[0,1,2,1,1,2,0,0,0]},
+    '3모둠':{name:'3모둠',quest:3,gold:270,correct:21,wrong:[2,3,2,2,0,0,0,0,0]},
+    '4모둠':{name:'4모둠',quest:6,gold:490,correct:40,wrong:[0,0,1,1,2,1,1,2,0]},
+    '5모둠':{name:'5모둠',quest:5,gold:380,correct:31,wrong:[1,2,0,2,3,1,0,0,0]},
+    '6모둠':{name:'6모둠',quest:2,gold:130,correct:10,wrong:[3,2,0,0,0,0,0,0,0]},
+  };
+  const now=Date.now();
+  studentsData=[
+    {name:'김민준',team:'1모둠',gold:180,quest:4,hp:75,correctArr:[10,10,8,2,0,0,0,0,0],wrongArr:[1,1,1,2,0,0,0,0,0],startTime:now-23*60000,finishTime:null,online:true},
+    {name:'이서연',team:'1모둠',gold:160,quest:4,hp:100,correctArr:[10,9,7,1,0,0,0,0,0],wrongArr:[0,1,2,1,0,0,0,0,0],startTime:now-23*60000,finishTime:null,online:true},
+    {name:'박지훈',team:'2모둠',gold:210,quest:5,hp:50,correctArr:[10,10,10,3,2,0,0,0,0],wrongArr:[0,0,0,1,0,0,0,0,0],startTime:now-31*60000,finishTime:null,online:true},
+    {name:'최유나',team:'2모둠',gold:200,quest:5,hp:75,correctArr:[10,9,8,3,1,0,0,0,0],wrongArr:[0,1,2,1,1,0,0,0,0],startTime:now-31*60000,finishTime:null,online:false},
+    {name:'정다은',team:'3모둠',gold:130,quest:3,hp:100,correctArr:[9,8,4,0,0,0,0,0,0],wrongArr:[1,2,2,0,0,0,0,0,0],startTime:now-18*60000,finishTime:null,online:true},
+    {name:'한지호',team:'4모둠',gold:250,quest:6,hp:75,correctArr:[10,10,9,3,3,2,1,0,0],wrongArr:[0,0,1,1,1,1,1,0,0],startTime:now-42*60000,finishTime:now-2*60000,online:true},
+    {name:'오세진',team:'4모둠',gold:240,quest:6,hp:100,correctArr:[10,10,8,2,3,2,1,0,0],wrongArr:[0,0,1,1,1,0,0,0,0],startTime:now-42*60000,finishTime:null,online:true},
+  ];
+  render();
+}
+
+function simTick(){
+  Object.values(teamsData).forEach(t=>{
+    const r=Math.random();
+    if(r<0.5&&t.quest<9){const c=Math.floor(Math.random()*5)+4,w=Math.floor(Math.random()*2);t.correct+=c;t.gold+=c*10+(w?0:100);if(w)t.wrong[t.quest-1]++;t.quest++;}
+    else if(r<0.8){const qi=Math.max(0,t.quest-1);t.wrong[qi]++;}
+  });
+  render();
+  document.getElementById('update-time').innerText=new Date().toLocaleTimeString('ko-KR');
+}
+
+function resetDemo(){
+  Object.values(teamsData).forEach(t=>{t.quest=1;t.gold=0;t.correct=0;t.wrong=Array(9).fill(0);});
+  render();
+}
+
+/* 렌더링 */
+/* ── 학급 필터 ── */
+function updateClassFilterOptions(classNames){
+    ['class-filter','adm-class-filter'].forEach(id=>{
+        const sel=document.getElementById(id);
+        if(!sel) return;
+        const cur=sel.value;
+        sel.innerHTML='';
+        classNames.sort().forEach(c=>{
+            const o=document.createElement('option');
+            o.value=c; o.textContent=c;
+            if(c===cur) o.selected=true;
+            sel.appendChild(o);
+        });
+        if(!classNames.includes(sel.value) && classNames.includes(classCode)) sel.value=classCode;
+    });
+}
+
+function applyClassFilter(){
+    const sel=document.getElementById('adm-class-filter');
+    const v=(sel?.value)||'';
+    if(v===classCode) return; // 변경 없음
+    if(!window._fdb) return;
+    if(!v){
+        // 보안을 위해 '전체 학급' 보기는 허용하지 않음 — 현재 학급으로 되돌린다.
+        if(sel) sel.value=classCode;
+        alert('학생 개인정보 보호를 위해 전체 학급 보기는 지원하지 않습니다. 특정 학급을 선택해주세요.');
+        return;
+    }
+    window._fdb.ref(`classes/${v}/meta/dashboardPw`).once('value').then(snap=>{
+        const savedPw=snap.val();
+        openClassPwModal(savedPw?'enter':'set', window._fdb, savedPw, v, `classes/${v}/meta/dashboardPw`, ()=>{
+            loadClassData(window._fdb, v);
+        }, ()=>{
+            if(sel) sel.value=classCode; // 취소 시 원래 학급으로 되돌림
+        });
+    }).catch(e=>{
+        alert('학급 확인 실패: '+e.message);
+        if(sel) sel.value=classCode;
+    });
+}
+
+/* 관리자 학급 전환: 비밀번호 확인 후 실제로 해당 학급 데이터를 불러온다 */
+function loadClassData(fdb, v){
+    classCode=v;
+    isAllMode=false;
+    window._fdb=fdb;
+    document.getElementById('live-status').innerText='🔴 Firebase 연결됨 — 실시간 동기화 중';
+    const cbadge=document.getElementById('class-badge');
+    const cbadgeName=document.getElementById('class-badge-name');
+    if(cbadge&&cbadgeName){cbadge.style.display='block'; cbadgeName.innerText=v;}
+    ['class-filter','adm-class-filter'].forEach(id=>{
+        const el=document.getElementById(id); if(el) el.value=v;
+    });
+    const badge=document.getElementById('filter-badge');
+    if(badge) badge.innerText=v?`[${v}]`:'';
+    const path=`classes/${v}/teams`;
+    fdb.ref(path).once('value',snap=>{
+        const raw=snap.val()||{};
+        teamsData={}; studentsData=[];
+        Object.entries(raw).forEach(([code,obj])=>{
+            const mems=Object.values(obj.members||{});
+            if(!mems.length) return;
+            const wrong=Array(8).fill(0);
+            mems.forEach(m=>{if(m.wrong)Object.entries(m.wrong).forEach(([i,val])=>{
+                const idx=+i; if(idx<6)wrong[idx]+=(val||0);
+                else if(idx===7)wrong[6]+=(val||0);
+                else if(idx===8)wrong[7]+=(val||0);
+            });});
+            teamsData[code]={name:code,
+                gold:mems.reduce((s,m)=>s+(m.gold||0),0),
+                quest:Math.min(...mems.map(m=>m.quest||1)), // 모둠원 전체가 통과한(=가장 뒤처진 팀원의) 퀘스트
+                correct:mems.reduce((s,m)=>s+(m.correct||0),0),wrong};
+            mems.forEach(m=>{studentsData.push({
+                name:m.name||'익명',team:code,gold:m.gold||0,
+                quest:m.quest||1,hp:m.hp||0,
+                correctArr:m.correctArr||[],wrongArr:m.wrong||[],
+                startTime:m.startTime||null,finishTime:m.finishTime||null,
+                online:m.online||false
+            });});
+        });
+        render(); renderStudentTab(); renderStruggling();
+    });
+    loadSurveyData(fdb, v);
+    fdb.ref(sessionMetaPath()).once('value').then(snap=>{
+        sessionEndTime=snap.val()||null;
+        updateSessionBanner();
+        render();
+    }).catch(e=>console.error('세션 상태 읽기 실패:', e));
+}
+
+/* 마스터 비밀번호 인증 후: 모든 학급의 데이터를 한 화면에 모아서 보여준다 (읽기 전용).
+   각 모둠 이름 앞에 [학급코드]를 붙여서 어느 학급(코드) 소속인지 바로 알 수 있게 한다.
+   학급 코드를 잘못 입력해 엉뚱한 코드로 접속한 학생을 찾을 때 유용하다. */
+function finishConnectAll(fdb){
+    document.getElementById('setup-modal').style.display='none';
+    document.getElementById('live-status').innerText='🔴 Firebase 연결됨 — 전체 학급 통합 보기 (읽기 전용)';
+    classCode='__ALL__';
+    isAllMode=true;
+    window._fdb=fdb;
+    const badge=document.getElementById('class-badge');
+    const badgeName=document.getElementById('class-badge-name');
+    if(badge&&badgeName){badge.style.display='block'; badgeName.innerText='전체 학급 통합 보기 (읽기 전용)';}
+    const filterBadge=document.getElementById('filter-badge');
+    if(filterBadge) filterBadge.innerText='';
+    surveyData={}; // 설문 분석 탭은 학급별 화면이라 통합 보기에서는 비워둔다 (설문 CSV 다운로드 버튼으로 전체 학급 결과를 한 파일로 받을 수 있음)
+    if(document.getElementById('tab-survey')?.classList.contains('active')) renderSurvey();
+
+    fdb.ref('classes').on('value',snap=>{
+        const allClasses=snap.val()||{};
+        updateClassFilterOptions(Object.keys(allClasses));
+        teamsData={}; studentsData=[];
+        Object.entries(allClasses).forEach(([cCode,cObj])=>{
+            const raw=(cObj&&cObj.teams)||{};
+            Object.entries(raw).forEach(([code,obj])=>{
+                const mems=Object.values(obj.members||{});
+                if(!mems.length) return;
+                const wrong=Array(8).fill(0);
+                mems.forEach(m=>{if(m.wrong)Object.entries(m.wrong).forEach(([i,v])=>{
+                    const idx=+i; if(idx<6)wrong[idx]+=(v||0);
+                    else if(idx===7)wrong[6]+=(v||0);
+                    else if(idx===8)wrong[7]+=(v||0);
+                });});
+                const teamLabel=`[${cCode}] ${code}`;
+                const teamKey=`${cCode}::${code}`;
+                teamsData[teamKey]={name:teamLabel,
+                    gold:mems.reduce((s,m)=>s+(m.gold||0),0),
+                    quest:Math.min(...mems.map(m=>m.quest||1)), // 모둠원 전체가 통과한(=가장 뒤처진 팀원의) 퀘스트
+                    correct:mems.reduce((s,m)=>s+(m.correct||0),0),wrong};
+                mems.forEach(m=>{studentsData.push({
+                    name:m.name||'익명',team:teamLabel,gold:m.gold||0,
+                    quest:m.quest||1,hp:m.hp||0,
+                    correctArr:m.correctArr||[],wrongArr:m.wrong||[],
+                    startTime:m.startTime||null,finishTime:m.finishTime||null,
+                    online:m.online||false
+                });});
+            });
+        });
+        render();
+        if(document.getElementById('tab-student')?.classList.contains('active')){
+            renderStudentTab(); renderStruggling();
+        }
+        document.getElementById('update-time').innerText=new Date().toLocaleTimeString('ko-KR');
+    }, fbErr=>{
+        console.error('classes 리스너 오류:', fbErr);
+        document.getElementById('live-status').innerText='🔴 읽기 실패: '+fbErr.message;
+    });
+}
+
+/* ── 어려움 감지 ──
+   관리자 탭의 struggling-list와, 관리자 모드가 아니어도 보이는 public-struggling
+   두 곳에 동일한 내용을 렌더링한다. */
+function renderStruggling(){
+    const targets=['struggling-list','public-struggling']
+        .map(id=>document.getElementById(id)).filter(Boolean);
+    if(!targets.length) return;
+    if(!studentsData.length){
+        targets.forEach(el=>el.innerHTML='<span style="color:#555;font-size:13px;">데이터 없음</span>');
+        return;
+    }
+    // "학생별 진행 상황 한눈에 보기"와 동일한 기준: 틀린 문제 개수(4개 이상) + 낮은 진행률 학생을 우선 표시
+    const list=computeStudentPriority(studentsData)
+        .filter(w=>w.repeat || w.lowProgress)
+        .sort(priorityCompare);
+    if(!list.length){
+        targets.forEach(el=>el.innerHTML='<span style="color:#2ecc71;font-size:13px;">✅ 모든 학생 정상 진행 중</span>');
+        return;
+    }
+    const html=`<table style="width:100%;border-collapse:collapse;font-size:11px;">
+      <thead><tr style="color:#e74c3c;border-bottom:1px solid rgba(231,76,60,0.3);">
+        <th style="padding:4px 6px;text-align:left;">이름</th>
+        <th style="padding:4px;text-align:center;">모둠</th>
+        <th style="padding:4px;text-align:left;">현재 문항</th>
+        <th style="padding:4px;text-align:center;">오답</th>
+        <th style="padding:4px;text-align:left;">상태</th>
+      </tr></thead>
+      <tbody>${list.map(({s,wrongOnCurrent,repeat,lowProgress})=>{
+        const st=[];
+        if(repeat) st.push(`틀린 문제 ${wrongOnCurrent}개`);
+        if(lowProgress) st.push('진행률 낮음');
+        return `<tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+          <td style="padding:4px 6px;color:#e0e0e0;font-weight:bold;">${s.name}</td>
+          <td style="padding:4px;text-align:center;color:#aaa;">${s.team}</td>
+          <td style="padding:4px;color:#c39bd3;"><b>Q${s.quest}</b> <span style="color:#888;">${questDesc(s.quest)}</span></td>
+          <td style="padding:4px;text-align:center;color:#e74c3c;">${wrongOnCurrent}</td>
+          <td style="padding:4px;color:#f39c12;">${st.join(' · ')}</td>
+        </tr>`;
+      }).join('')}</tbody></table>`;
+    targets.forEach(el=>el.innerHTML=html);
+}
+
+function render(){
+  const teams=Object.values(teamsData);
+  if(!teams.length){
+    ['leaderboard','err-bars'].forEach(id=>{
+      document.getElementById(id).innerHTML='<span style="color:#555;font-size:13px">모둠 입장을 기다리는 중...</span>';
+    });
+    document.getElementById('public-struggling').innerHTML='<span style="color:#555;font-size:13px">모둠 입장을 기다리는 중...</span>';
+    return;
+  }
+  const sorted=[...teams].sort((a,b)=>b.gold-a.gold);
+  document.getElementById('s-teams').innerText=teams.length;
+  document.getElementById('s-quest').innerText='Q'+(teams.reduce((s,t)=>s+t.quest,0)/teams.length).toFixed(1);
+  document.getElementById('s-correct').innerText=teams.reduce((s,t)=>s+t.correct,0);
+  document.getElementById('s-gold').innerText=Math.round(teams.reduce((s,t)=>s+t.gold,0)/teams.length);
+
+  /* 리더보드 (골드 기준 정렬) — 각 모둠에서 가장 빠른 학생 / 가장 느린 학생의 진행도를 함께 표시 */
+  const medals=['🥇','🥈','🥉'];
+  document.getElementById('leaderboard').innerHTML=sorted.map((t,i)=>{
+    // 이 모둠의 학생 목록
+    const members=studentsData.filter(s=>s.team===t.name);
+    const memberRows=isAdmin&&!isAllMode&&members.length?members.map(m=>`
+      <div style="display:flex;align-items:center;gap:6px;padding:3px 4px 3px 32px;
+           border-top:1px solid rgba(255,255,255,0.04);font-size:11px;">
+        <span style="color:#aaa;flex:1;">${m.name}</span>
+        <span style="color:#c39bd3;font-size:10px;">Q${m.quest}</span>
+        <span style="color:#f1c40f;min-width:46px;text-align:right;">🪙${m.gold}G</span>
+        <button class="del-btn" onclick="deleteMember('${t.name}','${m.name}')"
+          style="font-size:10px;padding:1px 6px;">삭제</button>
+      </div>`).join(''):'';
+
+    // 모둠 내 가장 빠른 학생 / 모둠 전원이 통과한 퀘스트 (진행 퀘스트 기준, 개인 이름은 표시하지 않음)
+    // 관리자 모드에서는 아래 모둠원 상세 목록에 개인별 퀘스트가 이미 나오므로 중복을 피해 생략한다.
+    let progressRows='';
+    if(members.length && !isAdmin){
+      const fastest=[...members].sort((a,b)=>(b.quest||1)-(a.quest||1))[0];
+      const row=(label,color,icon,q)=>`
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="font-size:9px;color:${color};min-width:58px;white-space:nowrap;">${icon} ${label}</span>
+          <div class="quest-dots">${questDotsHtml(q)}</div>
+          <span style="font-size:10px;color:${color};font-weight:bold;white-space:nowrap;">Q${q}</span>
+        </div>`;
+      progressRows = members.length>1
+        ? row('가장 빠름',  '#2ecc71', '🏃', fastest.quest) + row('전원 통과', '#3498db', '✅', t.quest)
+        : row('진행도', '#c39bd3', '👤', fastest.quest);
+    }
+
+    return`<div class="rank-row" style="flex-direction:column;align-items:stretch;padding:0;">
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 2px;">
+        <span class="rank-num">${medals[i]||i+1}</span>
+        <span class="rank-name">${t.name}</span>
+        <span class="gold-num">🪙${t.gold}G</span>
+        ${isAdmin&&!isAllMode?`<button class="del-btn" onclick="deleteTeam('${t.name}')">모둠삭제</button>`:''}
+      </div>
+      ${progressRows?`<div style="display:flex;flex-direction:column;gap:3px;padding:0 4px 8px 40px;">${progressRows}</div>`:''}
+      ${memberRows}
+    </div>`;
+  }).join('');
+
+  /* 오답 현황 (Q1~Q7, 각 문항 설명 포함) — 오답이 많은 순으로 정렬해서 자주 틀리는 유형을 바로 보여준다 */
+  const errs=Array(8).fill(0);
+  teams.forEach(t=>t.wrong.forEach((v,i)=>{ if(i<8) errs[i]+=(v||0); }));
+  const errRows=ERR_LABELS.map((q,i)=>({q,desc:ERR_DESCS[i],v:errs[i]})).sort((a,b)=>b.v-a.v);
+  const me=Math.max(...errRows.map(r=>r.v),1);
+  document.getElementById('err-bars').innerHTML=errRows.map((r,i)=>{
+    const col=r.v<=0?'#3498db':(i===0?'#e74c3c':i===1?'#e67e22':r.v>=3?'#f39c12':'#3498db');
+    return`<div class="bar-row">
+      <div class="bar-lbl" style="min-width:130px;max-width:130px;text-align:left;white-space:normal;line-height:1.3;" title="${r.desc}">
+        <b style="color:#f1c40f;">${r.q}</b> <span style="color:#999;">${r.desc}</span>
+      </div>
+      <div class="bar-track"><div class="bar-fill" style="width:${Math.round(r.v/me*100)}%;background:${col}"></div></div>
+      <div class="bar-val" style="color:${col}">${r.v}</div>
+    </div>`;
+  }).join('');
+
+  renderStruggling();
+}
+
+/* ── 관리자 탭 전환 ── */
+function switchAdmTab(tab){
+    document.getElementById('tab-game').classList.toggle('active', tab==='game');
+    document.getElementById('tab-student').classList.toggle('active', tab==='student');
+    document.getElementById('tab-survey').classList.toggle('active', tab==='survey');
+    const mainGrid=document.querySelector('.main-grid');
+    const sumGrid=document.querySelector('.summary-grid');
+    const surveyPanel=document.getElementById('survey-panel');
+    const studentPanel=document.getElementById('student-panel');
+    mainGrid.style.display = (tab==='game') ? '' : 'none';
+    sumGrid.style.display  = (tab==='game') ? '' : 'none';
+    studentPanel.style.display = (tab==='student') ? 'block' : 'none';
+    surveyPanel.style.display  = (tab==='survey') ? 'block' : 'none';
+    if(tab==='student'){renderStudentTab();renderStruggling();}
+    if(tab==='survey') renderSurvey();
+}
+
+/* ── 설문 데이터 ── */
+let surveyData={};
+const SV_LABELS=['수학 흥미도','게임 몰입·재미','수업 참여 의지','개념 이해도','그래프 성질 이해','협력학습 만족도'];
+
+function loadSurveyData(fdb, cls){
+    const svPath=cls?`classes/${cls}/survey`:'survey';
+    fdb.ref(svPath).on('value',snap=>{
+        surveyData=snap.val()||{};
+        if(document.getElementById('tab-survey').classList.contains('active')){
+            renderSurvey();
+        }
+    });
+}
+
+function renderSurvey(){
+    const entries=Object.values(surveyData);
+    const n=entries.length;
+    // 요약 카드
+    const avgs=SV_LABELS.map((_,i)=>{
+        const vals=entries.map(e=>e['q'+(i+1)]).filter(v=>typeof v==='number');
+        return vals.length?( vals.reduce((a,b)=>a+b,0)/vals.length ).toFixed(2) : '—';
+    });
+    const overallAvg=avgs.filter(v=>v!=='—').length
+        ? (avgs.filter(v=>v!=='—').reduce((s,v)=>s+parseFloat(v),0)/avgs.filter(v=>v!=='—').length).toFixed(2)
+        : '—';
+
+    document.getElementById('sv-summary').innerHTML=`
+        <div class="sv-stat-card"><div class="sv-stat-label">응답 수</div><div class="sv-stat-val">${n}명</div></div>
+        <div class="sv-stat-card"><div class="sv-stat-label">전체 평균</div><div class="sv-stat-val">${overallAvg}</div></div>
+        <div class="sv-stat-card"><div class="sv-stat-label">협력학습 만족</div><div class="sv-stat-val">${avgs[5]}</div></div>
+        <div class="sv-stat-card"><div class="sv-stat-label">게임 재미</div><div class="sv-stat-val">${avgs[1]}</div></div>
+        <div class="sv-stat-card"><div class="sv-stat-label">개념 이해</div><div class="sv-stat-val">${avgs[3]}</div></div>
+        <div class="sv-stat-card"><div class="sv-stat-label">수업 참여 의지</div><div class="sv-stat-val">${avgs[2]}</div></div>
+    `;
+
+    // 문항별 바
+    if(!n){
+        document.getElementById('sv-bars').innerHTML='<span style="color:#555;font-size:13px;">아직 응답 없음</span>';
+    } else {
+        document.getElementById('sv-bars').innerHTML=SV_LABELS.map((lb,i)=>{
+            const v=parseFloat(avgs[i]);
+            if(isNaN(v))return'';
+            const pct=Math.round(v/5*100);
+            const col=v>=4?'#2ecc71':v>=3?'#f1c40f':'#e74c3c';
+            return`<div class="sv-bar-row">
+                <div class="sv-bar-lbl">Q${i+1}. ${lb}</div>
+                <div class="sv-bar-track"><div class="sv-bar-fill" style="width:${pct}%;background:${col}"></div></div>
+                <div class="sv-bar-val" style="color:${col}">${v}</div>
+            </div>`;
+        }).join('');
+    }
+
+    // 자유서술
+    const comments=entries.filter(e=>e.comment&&e.comment.trim());
+    document.getElementById('sv-comments').innerHTML=comments.length
+        ? comments.map(e=>`<div class="sv-comment-box">
+            <div class="sv-comment-meta">${e.playerName||'익명'} (${e.teamCode||'—'}) · 골드 ${e.gold||0}G · Q${e.finalQuest||1} 도달</div>
+            ${e.comment}
+          </div>`).join('')
+        : '<span style="color:#555;font-size:13px;">자유 서술 응답 없음</span>';
+
+    // 학생별 상세
+    if(!n){
+        document.getElementById('sv-detail').innerHTML='<span style="color:#555;font-size:13px;">아직 응답 없음</span>';
+        return;
+    }
+    const sorted=[...entries].sort((a,b)=>(b.gold||0)-(a.gold||0));
+    document.getElementById('sv-detail').innerHTML=`
+        <table style="width:100%;border-collapse:collapse;font-size:11px;">
+            <thead>
+                <tr style="color:#9b59b6;border-bottom:1px solid rgba(155,89,182,0.3);">
+                    <th style="padding:5px 6px;text-align:left;">이름</th>
+                    <th style="padding:5px 4px;text-align:center;">모둠</th>
+                    <th style="padding:5px 4px;text-align:center;">🪙골드</th>
+                    <th style="padding:5px 4px;text-align:center;">Q도달</th>
+                    <th style="padding:5px 4px;text-align:center;">Q1</th>
+                    <th style="padding:5px 4px;text-align:center;">Q2</th>
+                    <th style="padding:5px 4px;text-align:center;">Q3</th>
+                    <th style="padding:5px 4px;text-align:center;">Q4</th>
+                    <th style="padding:5px 4px;text-align:center;">Q5</th>
+                    <th style="padding:5px 4px;text-align:center;">Q6</th>
+                    <th style="padding:5px 4px;text-align:center;">평균</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${sorted.map(e=>{
+                    const qs=[e.q1,e.q2,e.q3,e.q4,e.q5,e.q6].filter(v=>typeof v==='number');
+                    const avg=qs.length?(qs.reduce((a,b)=>a+b,0)/qs.length).toFixed(1):'—';
+                    const avgNum=parseFloat(avg);
+                    const col=avgNum>=4?'#2ecc71':avgNum>=3?'#f1c40f':'#e74c3c';
+                    const cell=v=>typeof v==='number'?`<span style="color:${v>=4?'#2ecc71':v>=3?'#f1c40f':'#e74c3c'}">${v}</span>`:'—';
+                    return`<tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                        <td style="padding:5px 6px;color:#e0e0e0;">${e.playerName||'익명'}</td>
+                        <td style="padding:5px 4px;text-align:center;color:#aaa;">${e.teamCode||'—'}</td>
+                        <td style="padding:5px 4px;text-align:center;color:#f1c40f;">${e.gold||0}</td>
+                        <td style="padding:5px 4px;text-align:center;color:#c39bd3;">Q${e.finalQuest||1}</td>
+                        <td style="padding:5px 4px;text-align:center;">${cell(e.q1)}</td>
+                        <td style="padding:5px 4px;text-align:center;">${cell(e.q2)}</td>
+                        <td style="padding:5px 4px;text-align:center;">${cell(e.q3)}</td>
+                        <td style="padding:5px 4px;text-align:center;">${cell(e.q4)}</td>
+                        <td style="padding:5px 4px;text-align:center;">${cell(e.q5)}</td>
+                        <td style="padding:5px 4px;text-align:center;">${cell(e.q6)}</td>
+                        <td style="padding:5px 4px;text-align:center;font-weight:bold;color:${col}">${avg}</td>
+                    </tr>`;
+                }).join('')}
+            </tbody>
+        </table>`;
+}
+
+/* ── 학생별 결과 렌더링 ── */
+function fmtElapsed(ms){
+    if(ms==null||ms<0)return'—';
+    const totalSec=Math.floor(ms/1000);
+    const m=Math.floor(totalSec/60), s=totalSec%60;
+    return `${m}분 ${s}초`;
+}
+
+function renderStudentTab(){
+    renderStudents();
+    renderStudentOverview();
+}
+
+function renderStudents(){
+    if(!studentsData.length){
+        document.getElementById('student-detail').innerHTML='<span style="color:#555;font-size:13px;">학생 데이터가 없습니다.</span>';
+        return;
+    }
+    const sorted=[...studentsData].sort((a,b)=> (a.team===b.team) ? (b.gold-a.gold) : a.team.localeCompare(b.team,'ko'));
+    const now=sessionEndTime||Date.now();
+    const qLabels=ERR_LABELS;
+    // correctArr/wrongArr 인덱스: [q1,q2,q3,q4,q4.5,q5,q6,q7] (q5.5는 별도 채점 없음, index 6은 0)
+    document.getElementById('student-detail').innerHTML=`
+        <table style="width:100%;border-collapse:collapse;font-size:11px;">
+            <thead>
+                <tr style="color:#9b59b6;border-bottom:1px solid rgba(155,89,182,0.3);">
+                    <th style="padding:5px 6px;text-align:left;">이름</th>
+                    <th style="padding:5px 4px;text-align:center;">모둠</th>
+                    <th style="padding:5px 4px;text-align:center;">상태</th>
+                    <th style="padding:5px 4px;text-align:center;">🪙골드</th>
+                    <th style="padding:5px 4px;text-align:center;">Q도달</th>
+                    <th style="padding:5px 4px;text-align:center;">걸린시간</th>
+                    ${qLabels.map((q,i)=>`<th style="padding:5px 4px;text-align:center;min-width:52px;" title="${ERR_DESCS[i]}">${q}<br><span style="font-weight:normal;color:#777;font-size:9px;">${ERR_DESCS[i]}</span></th>`).join('')}
+                </tr>
+            </thead>
+            <tbody>
+                ${sorted.map(s=>{
+                    const elapsed = s.startTime ? (s.finishTime ? s.finishTime-s.startTime : now-s.startTime) : null;
+                    const statusTxt = s.finishTime ? '완료' : (s.online ? '진행중' : '대기/이탈');
+                    const statusCol = s.finishTime ? '#2ecc71' : (s.online ? '#f1c40f' : '#888');
+                    // 정답수/오답수 배열은 인덱스 0~8: q1,q2,q3,q4,q4.5,q5,(빈칸),q6,q7
+                    const srcIdx=[0,1,2,3,4,5,7,8]; // qLabels에 대응하는 correctArr/wrongArr 인덱스
+                    const cells=srcIdx.map(i=>{
+                        const c=s.correctArr[i]||0, w=s.wrongArr[i]||0;
+                        const tot=c+w;
+                        if(tot===0)return'<span style="color:#444;">—</span>';
+                        const pct=Math.round(c/tot*100);
+                        const col=pct>=80?'#2ecc71':pct>=50?'#f1c40f':'#e74c3c';
+                        return `<span style="color:${col};font-weight:bold;">${pct}%</span><br><span style="color:#666;font-size:9px;">${c}/${tot}</span>`;
+                    });
+                    return `<tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                        <td style="padding:5px 6px;color:#e0e0e0;font-weight:bold;">${s.name}</td>
+                        <td style="padding:5px 4px;text-align:center;color:#aaa;">${s.team}</td>
+                        <td style="padding:5px 4px;text-align:center;color:${statusCol};">${statusTxt}</td>
+                        <td style="padding:5px 4px;text-align:center;color:#f1c40f;">${s.gold}</td>
+                        <td style="padding:5px 4px;text-align:center;color:#c39bd3;">Q${s.quest}</td>
+                        <td style="padding:5px 4px;text-align:center;color:#4fc3f7;white-space:nowrap;">${fmtElapsed(elapsed)}</td>
+                        ${cells.map(cell=>`<td style="padding:5px 4px;text-align:center;line-height:1.3;">${cell}</td>`).join('')}
+                    </tr>`;
+                }).join('')}
+            </tbody>
+        </table>`;
+}
+
+/* ── 학생별 진행 상황 통합 뷰 (진행도 + 오답 히트맵을 한 화면에, 틀린 문제 개수 많음/낮은 진행률 학생이 맨 위) ── */
+function renderStudentOverview(){
+    const box=document.getElementById('student-overview');
+    if(!box) return;
+    if(!studentsData.length){
+        box.innerHTML='<span style="color:#555;font-size:13px;">학생 데이터가 없습니다.</span>'; return;
+    }
+    const srcIdx=[0,1,2,3,4,5,7,8]; // ERR_LABELS에 대응하는 correctArr/wrongArr(9칸) 인덱스
+    let maxW=1;
+    studentsData.forEach(s=>srcIdx.forEach(i=>{ maxW=Math.max(maxW, s.wrongArr[i]||0); }));
+
+    const TOTAL=QUEST_FULL.length;
+
+    // 정렬 기준 (computeStudentPriority/priorityCompare 공용 로직):
+    //  1순위) 같은 문항에서 틀린 문제 개수 4개 이상 + 진행률까지 낮은 학생 → 최상단
+    //  2순위) 같은 문항에서 틀린 문제 개수 4개 이상인 학생 (진행률은 상대적으로 나은 편)
+    //  3순위) 그 외 나머지는 퀘스트 진행률이 낮은 학생 순
+    const sorted=computeStudentPriority(studentsData).sort(priorityCompare);
+
+    box.innerHTML=sorted.map(({s,pos,wrongOnCurrent})=>{
+        const pct=Math.round(((pos+1)/TOTAL)*100);
+        const label=QUEST_FULL[pos]||('Q'+s.quest);
+        const barCol=s.finishTime?'#2ecc71':(s.online?'#f39c12':'#888');
+        const badge=s.finishTime?'완료':('Q'+s.quest);
+        const statusTxt=s.finishTime?'완료':(s.online?'진행중':'대기/이탈');
+        const statusCol=s.finishTime?'#2ecc71':(s.online?'#f1c40f':'#888');
+        const repeatFlag=wrongOnCurrent>=REPEAT_WRONG_THRESHOLD;
+
+        const heatCells=srcIdx.map((i,qi)=>{
+            const c=s.correctArr[i]||0, w=s.wrongArr[i]||0;
+            if(c+w===0) return `<div style="min-width:38px;text-align:center;padding:2px 3px;border-radius:4px;background:rgba(255,255,255,0.03);color:#444;font-size:9px;" title="${ERR_LABELS[qi]} ${ERR_DESCS[qi]} — 아직 도달하지 않음">${ERR_LABELS[qi]}<br>—</div>`;
+            const heat=Math.min(w/maxW,1);
+            const bg=`rgba(231,76,60,${(0.12+heat*0.68).toFixed(2)})`;
+            const col=heat>0.5?'#fff':'#f1c40f';
+            return `<div style="min-width:38px;text-align:center;padding:2px 3px;border-radius:4px;background:${bg};color:${col};font-size:9px;font-weight:bold;" title="${ERR_LABELS[qi]} ${ERR_DESCS[qi]} — 오답 ${w}회">${ERR_LABELS[qi]}<br>❌${w}</div>`;
+        }).join('');
+
+        return `<div style="border:1px solid ${repeatFlag?'rgba(231,76,60,0.5)':'rgba(255,255,255,0.08)'};
+            background:${repeatFlag?'rgba(231,76,60,0.08)':'rgba(255,255,255,0.03)'};
+            border-radius:8px;padding:8px 10px;margin-bottom:8px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
+            <span style="font-weight:bold;color:#e0e0e0;font-size:12px;">${s.name}</span>
+            <span style="color:#888;font-size:10px;">${s.team}</span>
+            <span style="margin-left:auto;font-size:10px;color:${statusCol};">${statusTxt}</span>
+            <span style="font-size:10px;color:#f1c40f;font-weight:bold;">🪙${s.gold}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+            <div class="tg-track" style="flex:1;"><div class="tg-fill" style="width:${pct}%;background:${barCol};min-width:32px;">${badge}</div></div>
+            <span style="font-size:10px;color:#aaa;min-width:150px;white-space:nowrap;">${label}</span>
+          </div>
+          <div style="font-size:9px;color:#666;margin-bottom:3px;">문항별 오답 횟수 (❌ 뒤 숫자 = 오답 횟수, — = 아직 도달 안 함)</div>
+          <div style="display:flex;gap:3px;flex-wrap:wrap;">${heatCells}</div>
+        </div>`;
+    }).join('');
+}
+
+function exportSurveyCSV(){
+    if(isAllMode){ exportAllSurveyCSV(); return; }
+    const entries=Object.values(surveyData);
+    if(!entries.length){alert('설문 데이터가 없습니다.');return;}
+    const header=['이름','모둠','골드','도달퀘스트','Q1수학흥미','Q2게임재미','Q3참여의지','Q4개념이해','Q5그래프이해','Q6협력만족','평균','자유서술','제출시각'];
+    const rows=entries.map(e=>{
+        const qs=[e.q1,e.q2,e.q3,e.q4,e.q5,e.q6].filter(v=>typeof v==='number');
+        const avg=qs.length?(qs.reduce((a,b)=>a+b,0)/qs.length).toFixed(2):'';
+        return[e.playerName||'',e.teamCode||'',e.gold||0,e.finalQuest||1,e.q1||'',e.q2||'',e.q3||'',e.q4||'',e.q5||'',e.q6||'',avg,(e.comment||'').replace(/,/g,' '),e.submittedAt||''];
+    });
+    const csv='\uFEFF'+[header,...rows].map(r=>r.join(',')).join('\n');
+    const a=document.createElement('a');
+    a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+    a.download='설문결과_'+new Date().toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','')+'csv';
+    a.click();
+}
+
+/* 전체 학급 통합 보기 모드에서: 모든 학급의 설문 결과를 학급코드 열을 붙여 하나의 CSV로 내보낸다. */
+function exportAllSurveyCSV(){
+    if(!window._fdb){alert('Firebase에 연결되어 있지 않습니다.');return;}
+    window._fdb.ref('classes').once('value').then(snap=>{
+        const allClasses=snap.val()||{};
+        const header=['학급코드','이름','모둠','골드','도달퀘스트','Q1수학흥미','Q2게임재미','Q3참여의지','Q4개념이해','Q5그래프이해','Q6협력만족','평균','자유서술','제출시각'];
+        const rows=[];
+        Object.entries(allClasses).forEach(([cCode,cObj])=>{
+            const entries=Object.values((cObj&&cObj.survey)||{});
+            entries.forEach(e=>{
+                const qs=[e.q1,e.q2,e.q3,e.q4,e.q5,e.q6].filter(v=>typeof v==='number');
+                const avg=qs.length?(qs.reduce((a,b)=>a+b,0)/qs.length).toFixed(2):'';
+                rows.push([cCode,e.playerName||'',e.teamCode||'',e.gold||0,e.finalQuest||1,e.q1||'',e.q2||'',e.q3||'',e.q4||'',e.q5||'',e.q6||'',avg,(e.comment||'').replace(/,/g,' '),e.submittedAt||'']);
+            });
+        });
+        if(!rows.length){alert('설문 데이터가 없습니다.');return;}
+        const csv='\uFEFF'+[header,...rows].map(r=>r.join(',')).join('\n');
+        const a=document.createElement('a');
+        a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+        a.download='설문결과_전체학급_'+new Date().toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','')+'csv';
+        a.click();
+    }).catch(e=>alert('설문 데이터 조회 실패: '+e.message));
+}
+
+/* ── 관리자 기능 ── */
+let isAdmin=false;
+
+function openAdminMode(){
+    isAdmin=true;
+    document.getElementById('admin-bar').style.display='flex';
+    document.getElementById('admin-tab-bar').style.display='flex';
+    render(); // 삭제 버튼 포함해서 다시 렌더
+}
+function lockAdmin(){
+    isAdmin=false;
+    document.getElementById('admin-bar').style.display='none';
+    document.getElementById('admin-tab-bar').style.display='none';
+    switchAdmTab('game');
+    render();
+}
+
+/* ── 게임 종료 (걸린시간 정지) ──
+   학생 쪽 데이터/진행에는 전혀 영향을 주지 않고, 대시보드에 표시되는
+   "걸린시간"만 이 시각 기준으로 멈춘다. classCode 범위별로 Firebase에
+   저장해두기 때문에 새로고침하거나 다시 접속해도 상태가 유지된다. */
+function sessionMetaPath(){
+    return classCode ? `classes/${classCode}/meta/sessionEndTime` : 'meta/sessionEndTime';
+}
+function updateSessionBanner(){
+    const banner=document.getElementById('session-end-banner');
+    const btn=document.getElementById('btn-session-toggle');
+    if(!banner) return;
+    if(sessionEndTime){
+        banner.style.display='block';
+        banner.innerText='🛑 게임이 종료되어, 걸린시간이 '+new Date(sessionEndTime).toLocaleTimeString('ko-KR')+' 시점에서 멈춰 있습니다.';
+        if(btn) btn.innerText='▶ 걸린시간 다시 재기';
+    } else {
+        banner.style.display='none';
+        if(btn) btn.innerText='🛑 게임 종료 (걸린시간 정지)';
+    }
+}
+function toggleSessionEnd(){
+    if(isAllMode){alert('전체 학급 통합 보기는 읽기 전용입니다. 특정 학급을 선택한 후 이용해주세요.');return;}
+    if(sessionEndTime){
+        if(!confirm('걸린시간 측정을 다시 시작할까요? (학생들은 계속 게임을 진행 중이어야 합니다)')) return;
+        sessionEndTime=null;
+    } else {
+        if(!confirm('게임을 종료하고 걸린시간을 지금 시점에서 멈출까요?\n학생 화면/진행에는 영향이 없고, 대시보드의 걸린시간 표시만 멈춥니다.')) return;
+        sessionEndTime=Date.now();
+    }
+    if(window._fdb){
+        window._fdb.ref(sessionMetaPath()).set(sessionEndTime)
+            .catch(e=>console.error('세션 종료 시각 저장 실패:', e));
+    }
+    updateSessionBanner();
+    render();
+    if(document.getElementById('tab-student')?.classList.contains('active')) renderStudentTab();
+}
+
+
+function deleteMember(teamCode, memberName){
+    if(isAllMode){alert('전체 학급 통합 보기는 읽기 전용입니다. 특정 학급을 선택한 후 이용해주세요.');return;}
+    if(!confirm(`"${teamCode}" 모둠의 "${memberName}" 학생 데이터를 삭제하시겠습니까?`)) return;
+    if(firebase.apps.length>0){
+        firebase.database().ref((classCode?`classes/${classCode}/teams/`:'teams/')+`${teamCode}/members/${memberName}`).remove()
+            .catch(e=>alert('삭제 실패: '+e.message));
+    } else {
+        // 데모 모드
+        studentsData=studentsData.filter(s=>!(s.team===teamCode&&s.name===memberName));
+        render();
+    }
+}
+
+function deleteTeam(teamCode){
+    if(isAllMode){alert('전체 학급 통합 보기는 읽기 전용입니다. 특정 학급을 선택한 후 이용해주세요.');return;}
+    if(!confirm(`"${teamCode}" 모둠을 삭제하시겠습니까?`)) return;
+    if(firebase.apps.length>0){
+        firebase.database().ref((classCode?`classes/${classCode}/teams/`:'teams/')+teamCode).remove()
+            .then(()=>{ console.log(teamCode+' 삭제 완료'); })
+            .catch(e=>alert('삭제 실패: '+e.message));
+    } else {
+        // 데모 모드
+        delete teamsData[teamCode];
+        render();
+    }
+}
+
+function deleteAllTeams(){
+    if(isAllMode){alert('전체 학급 통합 보기는 읽기 전용입니다. 특정 학급을 선택한 후 이용해주세요.');return;}
+    if(!confirm('모든 모둠 데이터를 초기화하시겠습니까?\n이 작업은 되돌릴 수 없습니다.')) return;
+    if(firebase.apps.length>0){
+        firebase.database().ref(classCode?`classes/${classCode}/teams`:'teams').remove()
+            .then(()=>{ teamsData={}; render(); })
+            .catch(e=>alert('초기화 실패: '+e.message));
+    } else {
+        teamsData={};
+        render();
+    }
+}
+
+</script>
+</body>
+</html>
