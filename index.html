@@ -638,12 +638,6 @@
             border:1.5px solid #9b59b6; border-radius:12px;
             padding:8px 12px; min-width:175px;
         }
-        .dev-btn {
-            font-size:10px; padding:5px 6px; border-radius:6px;
-            border:1px solid #666; background:rgba(255,255,255,0.06);
-            color:#e0e0e0; cursor:pointer; text-align:left;
-        }
-        .dev-btn:hover { background:rgba(243,156,18,0.25); border-color:#f39c12; }
         #hint-popup, #team-done-popup {
             display:none; position:absolute; top:50%; left:50%;
             transform:translate(-50%,-50%);
@@ -672,7 +666,7 @@
             <label style="font-size:13px;color:#c39bd3;font-weight:bold;">내 이름</label>
             <input id="inp-pname" type="text" placeholder="이름 입력 (최대 6자)" maxlength="6"
                 style="font-size:15px;padding:7px 11px;border-radius:8px;border:2px solid #9b59b6;background:#1a0a2e;color:#fff;width:100%;box-sizing:border-box;">
-            <label style="font-size:13px;color:#c39bd3;font-weight:bold;">학급 코드 <span style="color:#666;font-size:10px;">(선택)</span></label>
+            <label style="font-size:13px;color:#c39bd3;font-weight:bold;">학급 코드</label>
             <input id="inp-class" type="text" placeholder="선생님이 알려준 코드를 입력하세요"
                 style="font-size:15px;padding:7px 11px;border-radius:8px;border:2px solid #9b59b6;background:#1a0a2e;color:#fff;width:100%;box-sizing:border-box;">
             <label style="font-size:13px;color:#c39bd3;font-weight:bold;">팀 코드</label>
@@ -747,34 +741,6 @@
                 🏆 학급 모둠 순위
             </div>
             <div id="class-hud-list" style="font-size:11px;line-height:2;"></div>
-        </div>
-    </div>
-
-    <!-- ── 개발자 모드: 퀘스트 바로가기 (게임 화면 오른쪽 바깥 여백에 고정 — 캡쳐 시 화면을 가리지 않음) ── -->
-    <button id="dev-toggle-btn" onclick="toggleDevPanel()" title="개발자 모드"
-        style="position:fixed;top:8px;right:8px;z-index:2600;width:34px;height:34px;
-        border-radius:8px;border:2px solid #555;background:rgba(0,0,0,0.75);
-        color:#f39c12;font-size:16px;cursor:pointer;line-height:1;">🛠</button>
-    <div id="dev-panel" style="display:none;position:fixed;top:48px;right:8px;z-index:2600;
-        background:rgba(10,6,20,0.96);border:2px solid #555;border-radius:10px;
-        padding:8px;width:180px;max-height:80vh;overflow-y:auto;">
-        <div style="font-size:11px;color:#f39c12;font-weight:bold;margin-bottom:6px;text-align:center;">
-            🛠 개발자 모드 — 퀘스트 이동
-        </div>
-        <div style="display:flex;flex-direction:column;gap:4px;" id="dev-btn-list">
-            <button class="dev-btn" onclick="devJump('q1')">Q1 이차함수 판별</button>
-            <button class="dev-btn" onclick="devJump('q2')">Q2 y=ax² 위 점</button>
-            <button class="dev-btn" onclick="devJump('q3')">Q3 그래프 짝짓기</button>
-            <button class="dev-btn" onclick="devJump('q4')">Q4 평행이동</button>
-            <button class="dev-btn" onclick="devJump('q45')">Q4.5 일반형→표준형</button>
-            <button class="dev-btn" onclick="devJump('q5')">Q5 표준형 축·꼭짓점</button>
-            <button class="dev-btn" onclick="devJump('q55_noweapon')">Q5.5 (무기 없음→요정)</button>
-            <button class="dev-btn" onclick="devJump('q55_weapon')">Q5.5 (무기 있음)</button>
-            <button class="dev-btn" onclick="devJump('q6')">Q6 일반형 그래프</button>
-            <button class="dev-btn" onclick="devJump('q7')">Q7 최종 결전</button>
-        </div>
-        <div style="font-size:9px;color:#666;margin-top:6px;text-align:center;">
-            이동 시 HP/골드/진행도가 초기화됩니다
         </div>
     </div>
 
@@ -1233,6 +1199,13 @@ const gd={
     q7:{c:0,w:0},
 };
 
+// 퀘스트 클리어 보너스: 오답 0회(완전 퍼펙트)는 +100G,
+// 오답 1~2회(우수 클리어, 문제는 결국 모두 맞춘 경우)는 +50G.
+function getQuestBonus(wrongCount){
+    if(wrongCount===0) return {gold:100, label:'🌟퍼펙트! +100G'};
+    return null;
+}
+
 /* ================================================================
    QUEST 1: 이차함수 판별 (10문제, 70%+마지막)
 ================================================================ */
@@ -1335,9 +1308,10 @@ function failQ1HP(){
 }
 
 function finishQ1(){
-    if(isPerfect)addGold(100);
+    const q1Bonus=getQuestBonus(gd.q1.w);
+    if(q1Bonus)addGold(q1Bonus.gold);
     markQuestPassed(1);
-    showOvFB('media/bless.png','QUEST 1 통과!\n⬆ LEVEL UP! ⬆'+(isPerfect?' 🌟퍼펙트! +100G':''),()=>{
+    showOvFB('media/bless.png','QUEST 1 통과!\n⬆ LEVEL UP! ⬆'+(q1Bonus?' '+q1Bonus.label:''),()=>{
         startQ2();
     });
 }
@@ -1618,9 +1592,10 @@ function getExamplePoints(a){
 function finishQ2(){
     cleanDots();
     ctx('graph-layer').clearRect(0,0,1000,750);
-    if(isPerfect)addGold(100);
+    const q2Bonus=getQuestBonus(gd.q2.w);
+    if(q2Bonus)addGold(q2Bonus.gold);
     markQuestPassed(2);
-    showOvFB('media/success2.png','몬스터의 성으로 가는 길을 찾았습니다!'+(isPerfect?'\n🌟퍼펙트! +100G':''),()=>{
+    showOvFB('media/success2.png','몬스터의 성으로 가는 길을 찾았습니다!'+(q2Bonus?'\n'+q2Bonus.label:''),()=>{
         startQ3Ov();
     });
 }
@@ -1990,8 +1965,10 @@ function finishQ3Ov(){
     // HP > 0이면 통과 (HP가 0이 되면 q3Wrong()에서 이미 처리)
     if(pHP>0){
         markQuestPassed(3);
+        const q3Bonus=getQuestBonus(gd.q3.w);
+        if(q3Bonus)addGold(q3Bonus.gold);
         showOvContain("media/bless1.png",
-            "🌿 숲의 정령이 나타나\n용사의 검에 마법의 기운을 불어넣어줍니다!",
+            "🌿 숲의 정령이 나타나\n용사의 검에 마법의 기운을 불어넣어줍니다!"+(q3Bonus?'\n'+q3Bonus.label:''),
             ()=>{
                 el('full-overlay').style.backgroundImage='none';
                 el('full-overlay').style.backgroundColor='rgba(0,0,0,0.92)';
@@ -2338,9 +2315,10 @@ function nextQ4(){
 function finishQ4(){
     disableQ4Drag();
     el('q4-overlay').style.display='none';
-    if(gd.q4.w===0)addGold(100);
+    const q4Bonus=getQuestBonus(gd.q4.w);
+    if(q4Bonus)addGold(q4Bonus.gold);
     markQuestPassed(4);
-    showOvFB('media/success.png','바위를 모두 굴렸습니다!\n길이 열렸습니다! 이제 마법의 숲으로...!'+(gd.q4.w===0?' 🌟퍼펙트! +100G':''),
+    showOvFB('media/success.png','바위를 모두 굴렸습니다!\n길이 열렸습니다! 이제 마법의 숲으로...!'+(q4Bonus?' '+q4Bonus.label:''),
         ()=>startUnicornScene());
 }
 
@@ -2499,8 +2477,8 @@ function buildInlineQ(prefix, prob){
 function genQ45Problems(){
     const probs=[];
 
-    // a=1: 문제 1,2 (매번 새 랜덤값)
-    for(let i=0;i<2;i++){
+    // a=1: 문제 1 (매번 새 랜덤값)
+    for(let i=0;i<1;i++){
         const p=randNonZero(-5,5);
         const q=randNonZero(-8,8);
         const b=-2*p, cv=p*p+q;
@@ -2520,10 +2498,10 @@ function genQ45Problems(){
         });
     }
 
-    // a≠1: 문제 3,4,5 (매번 새 랜덤값)
+    // a≠1: 문제 2,3 (매번 새 랜덤값)
     const aPool=[2,-1,3,-2];
     const usedA=new Set();
-    for(let i=0;i<3;i++){
+    for(let i=0;i<2;i++){
         let a; do{a=aPool[Math.floor(Math.random()*aPool.length)];}while(usedA.has(a));
         usedA.add(a);
         const p=randNonZero(-4,4), q=randNonZero(-6,6);
@@ -2681,18 +2659,34 @@ const q5APool=[1,-1,2,-2,3,-3,0.5,-0.5];
 
 function genQ5Problems(){
     const probs=[];
+    const usedPQ=new Set(); // 정답(p,q) 중복 방지
     function rA(){ return q5APool[Math.floor(Math.random()*q5APool.length)]; }
-    for(let i=0;i<3;i++){
-        const a=rA(); let p,q;
-        if(i===0){p=0;q=0;}
-        else if(i===1){p=randNonZero(-5,5);q=0;}
-        else{p=0;q=randNonZero(-6,6);}
-        probs.push({a,p,q});
+    function key(p,q){ return p+'_'+q; }
+
+    // 문제 1: 원점 (0,0)
+    probs.push({a:rA(),p:0,q:0}); usedPQ.add(key(0,0));
+
+    // 문제 2: x축 방향으로만 이동 (q=0)
+    {
+        let p,cnt=0;
+        do{ p=randNonZero(-5,5); cnt++; }while(usedPQ.has(key(p,0))&&cnt<200);
+        probs.push({a:rA(),p,q:0}); usedPQ.add(key(p,0));
     }
+
+    // 문제 3: y축 방향으로만 이동 (p=0)
+    {
+        let q,cnt=0;
+        do{ q=randNonZero(-6,6); cnt++; }while(usedPQ.has(key(0,q))&&cnt<200);
+        probs.push({a:rA(),p:0,q}); usedPQ.add(key(0,q));
+    }
+
+    // 문제 4~6: p,q 모두 이동, 이전 문제들과 (p,q) 조합이 겹치지 않도록
     for(let i=0;i<3;i++){
-        const a=rA();
-        const p=randNonZero(-5,5), q=randNonZero(-6,6);
-        probs.push({a,p,q});
+        let p,q,cnt=0;
+        do{
+            p=randNonZero(-5,5); q=randNonZero(-6,6); cnt++;
+        }while(usedPQ.has(key(p,q))&&cnt<300);
+        probs.push({a:rA(),p,q}); usedPQ.add(key(p,q));
     }
     return probs;
 }
@@ -2808,9 +2802,11 @@ function nextQ5(){
 function finishQ5(){
     el('q5-overlay').style.display='none';
     markQuestPassed(5);
+    const q5Bonus=getQuestBonus(gd.q5.w);
+    if(q5Bonus)addGold(q5Bonus.gold);
     // 마법의 활과 화살이 없어도 게임을 끝내지 않고 퀘스트 5.5(잠긴 문)까지는 도전할 수 있다.
     // 무기가 없는 채로 퀘스트 5.5를 통과하면 요정이 나타나 무기를 건네준다.
-    showOvFB('media/success3.png','⚔ 슬라임 몬스터를 물리쳤습니다!',
+    showOvFB('media/success3.png','⚔ 슬라임 몬스터를 물리쳤습니다!'+(q5Bonus?' '+q5Bonus.label:''),
         ()=>startQ55()
     );
 }
@@ -2956,6 +2952,7 @@ const Q6_CX=500, Q6_CY=265, Q6_UNIT=50;
 
 function genQ6Problems(){
     const probs=[];
+    const usedPQ=new Set(); // 정답(꼭짓점 p,q) 중복 방지
     function makeProb(a,p,q){
         const cv=a*p*p+q;
         return {a,b:-2*a*p,c:cv,p,q};
@@ -2972,33 +2969,67 @@ function genQ6Problems(){
         if(pr.c<-4||pr.c>4) return false;
         return true;
     }
-    // 앞 3문제: a=1, p값이 서로 다르도록
-    const usedP=new Set();
-    let cnt=0;
-    while(probs.length<3&&cnt<500){
-        cnt++;
-        const p=randNonZero(-4,4);
-        if(usedP.has(p)) continue;
-        const q=randNonZero(-4,4);
-        const pr=makeProb(1,p,q);
-        if(validProb(pr)){probs.push(pr);usedP.add(p);}
+    function pqKey(p,q){ return p+'_'+q; }
+
+    // 위로 볼록(a<0) : 아래로 볼록(a>0) 비율을 3:3, 2:4, 4:2 중 랜덤으로 선택해
+    // 6문제 전체에 골고루 섞는다.
+    const ratioOptions=[[3,3],[2,4],[4,2]]; // [아래로볼록 개수, 위로볼록 개수]
+    const [downCnt,upCnt]=ratioOptions[Math.floor(Math.random()*ratioOptions.length)];
+    function hasRunOfThreeOrMore(arr){
+        let run=1;
+        for(let i=1;i<arr.length;i++){
+            if(arr[i]===arr[i-1]){ run++; if(run>=3) return true; }
+            else run=1;
+        }
+        return false;
     }
-    // 뒤 3문제: a≠1 정수, a값이 서로 다르도록
-    const aPool=[2,-1,-2,3,-3];
-    const usedA=new Set();
-    cnt=0;
-    while(probs.length<6&&cnt<500){
+    let signs=[];
+    let shuffleAttempts=0;
+    do{
+        signs=[];
+        for(let i=0;i<downCnt;i++) signs.push(1);
+        for(let i=0;i<upCnt;i++) signs.push(-1);
+        for(let i=signs.length-1;i>0;i--){ // 셔플
+            const j=Math.floor(Math.random()*(i+1));
+            [signs[i],signs[j]]=[signs[j],signs[i]];
+        }
+        // 첫 번째 문제는 항상 x²계수=1(아래로 볼록)로 고정 — 비율(downCnt/upCnt)은 그대로 유지한 채 자리만 보정
+        if(signs[0]!==1){
+            const swapIdx=signs.findIndex((s,i)=>i>0&&s===1);
+            signs[0]=1; signs[swapIdx]=-1;
+        }
+        shuffleAttempts++;
+    }while(hasRunOfThreeOrMore(signs)&&shuffleAttempts<300);
+
+    // 앞 3문제
+    let cnt=0;
+    while(probs.length<3&&cnt<800){
         cnt++;
-        const a=aPool[Math.floor(Math.random()*aPool.length)];
-        if(usedA.has(a)) continue;
-        const p=randNonZero(-3,3), q=randNonZero(-3,3);
+        const a=signs[probs.length];
+        const p=randNonZero(-4,4), q=randNonZero(-4,4);
+        const k=pqKey(p,q);
+        if(usedPQ.has(k)) continue;
         const pr=makeProb(a,p,q);
-        if(validProb(pr)){probs.push(pr);usedA.add(a);}
+        if(validProb(pr)){probs.push(pr);usedPQ.add(k);}
+    }
+    // 뒤 3문제: |x²계수|≠1 (2 또는 3, 부호는 위 비율에 따라 결정)
+    const magPool=[2,3];
+    cnt=0;
+    while(probs.length<6&&cnt<800){
+        cnt++;
+        const mag=magPool[Math.floor(Math.random()*magPool.length)];
+        const a=signs[probs.length]*mag;
+        const p=randNonZero(-3,3), q=randNonZero(-3,3);
+        const k=pqKey(p,q);
+        if(usedPQ.has(k)) continue;
+        const pr=makeProb(a,p,q);
+        if(validProb(pr)){probs.push(pr);usedPQ.add(k);}
     }
     return probs;
 }
 
 let q6Problems=[], q6Idx=0, q6WrongPerQ=0;
+let q6PendingTimer=null; // 정답/오답 판정 후 예약된 지연 처리(다음 문제 이동, 오답 리셋)의 타이머 ID
 let q6ClickedVertex=null, q6ClickedYInt=null, q6CurvDir=null;
 let q6Mode=null; // 'vtx' | 'yint' | null
 let q6Dots=[];
@@ -3026,7 +3057,7 @@ function startQ6(){
     updateQ6HP(); updateUI();
     drawQ6Grid();
     showOv('media/bg1.png',
-        '🗺 QUEST 6: 성 내부 미로 탈출!\n\n일반형 → 표준형 변환 후 그래프를 그려\n미로에서 탈출하세요!\n[왼쪽] 표준형 변환 연습 공간\n[아래] ① 꼭짓점 클릭 → ② y절편 클릭\n③ 볼록 모양 선택 → ④ 제출!\n\n앞 3문제: x²계수=1 / 뒤 3문제: x²계수≠1\n총 6문제!',
+        '🗺 QUEST 6: 성 내부 미로 탈출!\n\n일반형 → 표준형 변환 후 그래프를 그려\n미로에서 탈출하세요!\n[왼쪽] 표준형 변환 연습 공간\n[아래] ① 꼭짓점 클릭 → ② y절편 클릭\n③ 볼록 모양 선택 → ④ 제출!\n\n총 6문제!',
         ()=>setupQ6(), false, '▶ 시작하기'
     );
 }
@@ -3080,11 +3111,14 @@ function drawQ6Grid(){
 }
 
 function setupQ6(){
+    // 이전 문제에서 예약된 지연 처리가 남아있다면 취소 (오판정/상태꼬임 방지)
+    if(q6PendingTimer){ clearTimeout(q6PendingTimer); q6PendingTimer=null; }
     const prob=q6Problems[q6Idx];
     q6ClickedVertex=null; q6ClickedYInt=null; q6CurvDir=null;
     q6Dots=[]; const _layer=document.getElementById('q6-dots-layer');if(_layer)_layer.innerHTML='';
     // 버튼 상태 초기화
     q6WrongPerQ=0; q6Mode=null;
+    const _submitBtn=el('q6-submit-btn'); if(_submitBtn) _submitBtn.disabled=false;
     el('q6-btn-up').classList.remove('selected');
     el('q6-btn-down').classList.remove('selected');
     el('q6-btn-vtx').className='q6-mode-btn';
@@ -3293,9 +3327,21 @@ function selectQ6Curv(dir){
     el('q6-btn-down').className='q6-curv-btn'+(dir==='down'?' selected':'');
 }
 function submitQ6(){
+    // 이미 판정 처리 중(버튼 비활성화 상태)이면 중복 제출 무시 — 타이머 경합으로 인한 오판정 방지
+    const submitBtn=el('q6-submit-btn');
+    if(submitBtn&&submitBtn.disabled) return;
+
     if(!q6ClickedVertex){el('q6-msg').style.color='#f39c12';el('q6-msg').innerText='[📍 꼭짓점 선택] 버튼을 누르고 꼭짓점을 클릭하세요!';return;}
     if(!q6ClickedYInt){el('q6-msg').style.color='#f39c12';el('q6-msg').innerText='[📌 y축과의 교점 선택] 버튼을 누르고 y절편을 클릭하세요!';return;}
     if(!q6CurvDir){el('q6-msg').style.color='#f39c12';el('q6-msg').innerText='∩ 위로 볼록 또는 ∪ 아래로 볼록 모양을 선택하세요!';return;}
+
+    // 이전에 예약된 지연 처리(오답 리셋 등)가 남아있다면 취소하여
+    // 방금 낸 정답이 나중에 도착하는 옛 타이머에 의해 덮어써지지 않도록 한다.
+    if(q6PendingTimer){ clearTimeout(q6PendingTimer); q6PendingTimer=null; }
+    // 판정 처리 중에는 제출/클릭을 잠가 중복 제출을 막는다.
+    if(submitBtn) submitBtn.disabled=true;
+    const clickLayer=document.getElementById('q6-dots-layer');
+    if(clickLayer) clickLayer.querySelectorAll('div').forEach(d=>{d.style.pointerEvents='none';});
 
     const prob=q6Problems[q6Idx];
     const vtxOk=(q6ClickedVertex.x===prob.p && q6ClickedVertex.y===prob.q);
@@ -3317,17 +3363,12 @@ function submitQ6(){
             first?ctx2.moveTo(sx,sy):ctx2.lineTo(sx,sy); first=false;
         }
         ctx2.stroke(); ctx2.shadowBlur=0;
-    }
 
-    if(ok){
         gd.q6.c++; pHP=Math.min(100,pHP+25); addGold(10);
         updateQ6HP(); updateUI();
         el('q6-msg').style.color='#2ecc71';
         el('q6-msg').innerText='✔ 길을 찾았다! 이쪽이다!';
-        // 점 클릭 비활성화
-        const layer=document.getElementById('q6-dots-layer');
-        if(layer) layer.querySelectorAll('div').forEach(d=>{d.style.pointerEvents='none';});
-        setTimeout(()=>nextQ6(),2000);
+        q6PendingTimer=setTimeout(()=>{ q6PendingTimer=null; nextQ6(); },2000);
     } else {
         gd.q6.w++; q6WrongPerQ++;
         pHP=Math.max(0,pHP-25);
@@ -3342,7 +3383,8 @@ function submitQ6(){
         if(q6WrongPerQ===1){
             el('q6-msg').style.color='#f39c12';
             el('q6-msg').innerText='✘ 막힌 길이다! HP -25. 다시 선택하세요!';
-            setTimeout(()=>{
+            q6PendingTimer=setTimeout(()=>{
+                q6PendingTimer=null;
                 q6ClickedVertex=null; q6ClickedYInt=null; q6CurvDir=null; q6Mode=null;
                 el('q6-btn-up').classList.remove('selected');
                 el('q6-btn-down').classList.remove('selected');
@@ -3359,11 +3401,12 @@ function submitQ6(){
                 });
                 el('q6-status').innerText='[📍 꼭짓점 선택] 버튼을 누르고 좌표평면에서 점을 클릭하세요';
                 el('q6-msg').innerText='';
+                if(submitBtn) submitBtn.disabled=false;
             },2200);
         } else {
             el('q6-msg').style.color='#e74c3c';
             el('q6-msg').innerText='✘ 2회 오답. 다음 문제로 넘어갑니다.';
-            setTimeout(()=>nextQ6(),2000);
+            q6PendingTimer=setTimeout(()=>{ q6PendingTimer=null; nextQ6(); },2000);
         }
     }
 }
@@ -3382,8 +3425,10 @@ function finishQ6(){
     el('q6-overlay').style.display='none';
     markQuestPassed(6);
     currentLevel=7; updateUI();
+    const q6Bonus=getQuestBonus(gd.q6.w);
+    if(q6Bonus)addGold(q6Bonus.gold);
     showOvFB('media/bg1.png',
-        '🗺 미로를 탈출했습니다! ⬆ LV UP!\n\n드디어... 미노타우루스 몬스터와 마주쳤다!\n최후의 결전이 시작된다!',
+        '🗺 미로를 탈출했습니다! ⬆ LV UP!\n\n드디어... 미노타우루스 몬스터와 마주쳤다!\n최후의 결전이 시작된다!'+(q6Bonus?' '+q6Bonus.label:''),
         ()=>startQ7()
     );
 }
@@ -3474,7 +3519,7 @@ function startQ7(){
     el('overlay-msg').style.display='none';
     updateQ7HP(); updateUI();
     showOv('media/bg1.png',
-        '⚔ QUEST 7: 미노타우루스 최종 결전\n\ny=ax²+bx+c의 a,b,c를 조건에서 구하라!\n⚠ HP가 0이 되거나 두 문제 중 하나라도 틀리면 패배!\n\n1번: 꼭짓점+통과점 조건\n2번: y절편+두 점 조건\n\n총 2문제 — 모두 맞춰야 통과!',
+        '⚔ QUEST 7: 미노타우루스 최종 결전\n\ny=ax²+bx+c의 a,b,c를 조건에서 구하라!\n⚠ HP가 0이 되면 즉시 패배!\n(문제당 기회 2번, 두 문제 모두 맞춰야 통과)\n\n📝 필기구와 연습장이\n필요할테니 준비해주세요!\n\n총 2문제 — 모두 맞춰야 통과!',
         ()=>setupQ7(), false, '▶ 시작하기'
     );
 }
@@ -3619,8 +3664,9 @@ function finishQ7(){
     markQuestPassed(7);
     el('q7-overlay').style.display='none';
     if(q7LastTwo[0]&&q7LastTwo[1]){
-        if(gd.q7.w===0)addGold(100);
-        showOv('media/mk_victory1.png','미노타우루스를 쓰러뜨렸다!\n어둠의 힘이 사라졌다!'+(gd.q7.w===0?' 🌟퍼펙트! +100G':''),
+        const q7Bonus=getQuestBonus(gd.q7.w);
+        if(q7Bonus)addGold(q7Bonus.gold);
+        showOv('media/mk_victory1.png','미노타우루스를 쓰러뜨렸다!\n어둠의 힘이 사라졌다!'+(q7Bonus?' '+q7Bonus.label:''),
             ()=>showOv('media/success4.png',
                 '⚔️ 미노타우루스 몬스터를 물리쳤다!\n용사여, 그대는 진정한 이차함수의 마스터!\n모든 퀘스트를 완료하였습니다! 🏆',
                 ()=>showOv('media/ending1.png',
@@ -3956,60 +4002,6 @@ function showTeamMsg(msg, color){
 /* ================================================================
    메모장
 ================================================================ */
-
-/* ================================================================
-   개발자 점프 버튼 (개발 완료 후 삭제)
-================================================================ */
-function toggleDevPanel(){
-    const p=document.getElementById('dev-panel');
-    if(!p) return;
-    p.style.display = (p.style.display==='none'||!p.style.display) ? 'block' : 'none';
-}
-
-// 어떤 퀘스트에서 점프하든 화면/상태가 뒤섞이지 않도록 공통으로 초기화한다.
-function devResetBase(){
-    if(window._openingTimer) clearTimeout(window._openingTimer);
-    const obtn=document.getElementById('opening-next-btn'); if(obtn) obtn.remove();
-    const startBtn=document.getElementById('ov-start-btn'); if(startBtn) startBtn.remove();
-    const fbBtn=document.getElementById('ov-feedback-btn'); if(fbBtn) fbBtn.remove();
-
-    ['q3-overlay','q4-overlay','q45-overlay','q5-overlay','q55-overlay','q6-overlay','q7-overlay',
-     'full-overlay','feedback-screen','opening-screen','unicorn-scene','team-screen'].forEach(id=>{
-        const e=document.getElementById(id); if(e) e.style.display='none';
-    });
-    const sp=document.getElementById('q6-side-panel'); if(sp) sp.style.display='none';
-    const ovMsg=document.getElementById('overlay-msg'); if(ovMsg) ovMsg.style.display='none';
-
-    pHP=100; gold=0; isPerfect=true; correctCount=0; qCount=1;
-    gd.q1={c:0,w:0}; gd.q2={c:0,w:0}; gd.q3={c:0,w:0}; gd.q4={c:0,w:0};
-    gd.q45={c:0,w:0}; gd.q5={c:0,w:0}; gd.q6={c:0,w:0}; gd.q7={c:0,w:0};
-
-    cleanDots();
-    ctx('grid-layer').clearRect(0,0,1000,750);
-    ctx('graph-layer').clearRect(0,0,1000,750);
-    el('grid-layer').style.display='none';
-    el('graph-layer').style.display='none';
-    el('knight').style.display='block';
-    el('target').style.display='block';
-    updateUI();
-}
-
-// 퀘스트별 바로가기. Q5.5는 마법의 활과 화살 유무에 따라 분기(요정 등장 여부)가
-// 갈리므로 두 가지 상태를 각각 테스트할 수 있게 별도 버튼으로 분리했다.
-function devJump(target){
-    devResetBase();
-    showTopUI(true);
-    if(target==='q1'){ hasWeapon=false; restartFromQ1(); return; }
-    if(target==='q2'){ hasWeapon=false; startQ2(); return; }
-    if(target==='q3'){ hasWeapon=false; startQ3Ov(); return; }
-    if(target==='q4'){ hasWeapon=false; startQ4(); return; }
-    if(target==='q45'){ hasWeapon=false; startQ45(); return; }
-    if(target==='q5'){ hasWeapon=false; startQ5(); return; }
-    if(target==='q55_noweapon'){ hasWeapon=false; startQ55(); return; }
-    if(target==='q55_weapon'){ hasWeapon=true; startQ55(); return; }
-    if(target==='q6'){ hasWeapon=true; startQ6(); return; }
-    if(target==='q7'){ hasWeapon=true; startQ7(); return; }
-}
 
 /* ================================================================
    재시작 (오프닝 없이 Q1으로)
